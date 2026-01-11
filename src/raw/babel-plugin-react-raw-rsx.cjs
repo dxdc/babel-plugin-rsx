@@ -223,6 +223,16 @@ module.exports = function ({ types: t }) {
         const left = path.node.left;
 
         if (
+          t.isMemberExpression(left) &&
+          t.isIdentifier(left.object, { name: "props" })
+        ) {
+          throw path.buildCodeFrameError(
+            "[RSX] Props are immutable.\n" +
+            "Do not assign to props.* — treat props as read-only inputs."
+          );
+        }
+
+        if (
           t.isIdentifier(left) &&
           isInstanceField(left.name, state)
         ) {
@@ -280,7 +290,9 @@ module.exports = function ({ types: t }) {
           const local = spec.local.name;
 
           // Ban these hooks in RSX
-          if (imported === "useState" || imported === "useCallback") {
+          if (imported === "useState" || 
+              imported === "useCallback" ||
+              imported === "useMemo") {
             bannedHooks.add(local);
           }
         }
@@ -310,6 +322,14 @@ module.exports = function ({ types: t }) {
             throw path.buildCodeFrameError(
               "[RSX] useState() is not allowed in .rsx files.\n" +
               "Use RSX local variables for instance state, or external hooks for shared state."
+            );
+          }
+
+          if (name === "useMemo") {
+            throw path.buildCodeFrameError(
+              "[RSX] useMemo() is not allowed in .rsx files.\n" +
+              "RSX code does not re-run on every render.\n" +
+              "Move expensive work to explicit update logic or manual memoization."
             );
           }
         }
