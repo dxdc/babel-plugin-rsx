@@ -4,7 +4,7 @@ import viteLogo from '/vite.svg'
 import './App.css'
 import {usePaginatedFetch } from  './Hooks'
 //import type {HomePageContentItem} from  './Hooks'
-import TestOnce from "./Test.rsx";
+import Test from "./Test.rsx";
 //import HighResTimer from './Timer1'
 //import HighResTimerRT from './Timer2'
 
@@ -90,7 +90,7 @@ function App() {
         {/* <Test label="Counter" /> */}
         {/* <HighResTimer></HighResTimer>
         <HighResTimerRT></HighResTimerRT> */}
-        <TestOnce></TestOnce>
+        <Test></Test>
         <a href="https://vite.dev" target="_blank">
           <img src={viteLogo} className="logo" alt="Vite logo" />
         </a>

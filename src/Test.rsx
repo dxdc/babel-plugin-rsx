@@ -1,15 +1,14 @@
 import { render } from "react-raw";
 
 
-export default function TestOnce(props) {
-  console.log("RSX INIT: this should print only once");
+export default function Test(props) {
+  console.log("INIT once per instance");
 
+  // this is stable ref state in RSX model
   let counter = 0;
   counter++;
 
-  console.log("counter value:", counter);
+  console.log("counter =", counter, "props =", props);
 
-  // We still return something for now, even though Phase 1
-  // does not yet remove the return semantics.
   return null;
 }

@@ -111,14 +111,43 @@ module.exports = function ({ types: t }) {
 
           const vars = [...state.rsx.instanceVars.entries()];
 
-          const initObject = t.objectExpression(
-            vars.map(([name, init]) =>
-              t.objectProperty(
-                t.identifier(name),
-                init || t.identifier("undefined")
-              )
+          // ------------------------------------------------------------
+          // Build the per-instance storage object that lives in:
+          //   __instanceRef.current
+          //
+          // This already stores all user "instance vars" (your persistent refs).
+          // In Phase 2 we ALSO seed internal RSX runtime slots onto this object.
+          // ------------------------------------------------------------
+          const initProps = vars.map(([name, init]) =>
+            t.objectProperty(
+              t.identifier(name),
+              init || t.identifier("undefined")
             )
           );
+
+          // ------------------------------------------------------------
+          // Phase 2: add internal RSX runtime slots.
+          //
+          // These live on __instance so they persist per instance, just like user vars.
+          // We keep them "compiler-internal" by using __* names.
+          //
+          // NOTE: we do NOT wire callbacks yet; we only create storage.
+          // ------------------------------------------------------------
+          initProps.push(
+            // init flag to ensure root runs only once per instance
+            t.objectProperty(t.identifier("__rsx_initialized"), t.booleanLiteral(false)),
+
+            // props tracking (used later for update(prev, next))
+            t.objectProperty(t.identifier("__rsx_prevProps"), t.identifier("undefined")),
+            t.objectProperty(t.identifier("__rsx_currentProps"), t.identifier("undefined")),
+
+            // lifecycle callback storage (wired in Phase 3+)
+            t.objectProperty(t.identifier("__rsx_updateCb"), t.nullLiteral()),
+            t.objectProperty(t.identifier("__rsx_viewCb"), t.nullLiteral()),
+            t.objectProperty(t.identifier("__rsx_destroyCb"), t.nullLiteral())
+          );
+
+          const initObject = t.objectExpression(initProps);
 
           const body = state.rsx.componentPath.get("body");
 
@@ -212,107 +241,123 @@ module.exports = function ({ types: t }) {
 
       // Capture the function component
       FunctionDeclaration(path, state) {
-      // ------------------------------------------------------------
-      // Only operate on the RSX root component.
-      // We assume Program.enter already identified and stored it
-      // in state.__rsxComponent.
-      // ------------------------------------------------------------
-      if (path.node !== state.__rsxComponent) return;
+        // ------------------------------------------------------------
+        // Only operate on the RSX root component.
+        // Your plugin identifies it via ExportDefaultDeclaration.
+        // ------------------------------------------------------------
+        if (!state.rsx || state.skipRSX) return;
+        if (path.node !== state.rsx.componentPath?.node) return;
 
-      // We only handle functions with block bodies:
-      //   function Foo() { ... }
-      // (arrow functions without blocks will be handled later)
-      if (!t.isBlockStatement(path.node.body)) return;
+        // We only handle functions with block bodies:
+        //   function Foo() { ... }
+        // (arrow functions without blocks will be handled later)
+        if (!t.isBlockStatement(path.node.body)) return;
 
-      // ------------------------------------------------------------
-      // Capture the original function body statements.
-      // This is the user-written code inside the component.
-      // ------------------------------------------------------------
-      const originalBody = path.node.body.body;
+        // ------------------------------------------------------------
+        // Capture original body (user-written statements).
+        // We still keep return statements for now (Phase 1 behavior),
+        // even though the new RSX model will later return only null/undefined.
+        // ------------------------------------------------------------
+        const originalBody = path.node.body.body;
 
-      // ------------------------------------------------------------
-      // We must separate return statements from all other statements.
-      //
-      // Why?
-      // - In Phase 1, we want the *logic* to run once
-      // - But we still want the function to be callable
-      //   without breaking existing JSX return behavior
-      //
-      // Eventually the root will return nothing,
-      // but we intentionally do NOT enforce that yet.
-      // ------------------------------------------------------------
-      const nonReturnStatements = [];
-      const returnStatements = [];
+        const nonReturnStatements = [];
+        const returnStatements = [];
 
-      for (const stmt of originalBody) {
-        if (t.isReturnStatement(stmt)) {
-          returnStatements.push(stmt);
-        } else {
-          nonReturnStatements.push(stmt);
+        for (const stmt of originalBody) {
+          if (t.isReturnStatement(stmt)) returnStatements.push(stmt);
+          else nonReturnStatements.push(stmt);
         }
-      }
 
-      // ------------------------------------------------------------
-      // Create an internal initialization flag:
-      //
-      //   let __rsx_initialized = false;
-      //
-      // This flag lives inside the component instance and is used
-      // to ensure the root code only executes once (init semantics).
-      // ------------------------------------------------------------
-      const initFlagDecl = t.variableDeclaration("let", [
-        t.variableDeclarator(
-          t.identifier("__rsx_initialized"),
-          t.booleanLiteral(false)
-        )
-      ]);
+        // ------------------------------------------------------------
+        // Create an internal initialization flag:
+        //
+        //   let __rsx_initialized = false;
+        //
+        // This flag lives inside the component instance and is used
+        // to ensure the root code only executes once (init semantics).
+        // ------------------------------------------------------------
+        const initFlagDecl = t.variableDeclaration("let", [
+          t.variableDeclarator(
+            t.identifier("__rsx_initialized"),
+            t.booleanLiteral(false)
+          )
+        ]);
 
-      // ------------------------------------------------------------
-      // Create the guarded init block:
-      //
-      //   if (!__rsx_initialized) {
-      //     __rsx_initialized = true;
-      //     // original user code
-      //   }
-      //
-      // This turns the RSX root into a constructor-like phase.
-      // All variables become persistent refs after this.
-      // ------------------------------------------------------------
-      const initGuard = t.ifStatement(
-        t.unaryExpression("!", t.identifier("__rsx_initialized")),
-        t.blockStatement([
-          // __rsx_initialized = true;
+        // ------------------------------------------------------------
+        // Phase 2: props tracking on every call.
+        //
+        // Use arguments[0] so this works whether the user writes:
+        //   function Player(props) { ... }
+        // or:
+        //   function Player({score}) { ... }
+        //
+        // This gives us:
+        //   prevProps and currentProps for future update(prev, next).
+        // ------------------------------------------------------------
+        const trackPropsStatements = [
+          // __instance.__rsx_prevProps = __instance.__rsx_currentProps;
           t.expressionStatement(
             t.assignmentExpression(
               "=",
-              t.identifier("__rsx_initialized"),
-              t.booleanLiteral(true)
+              t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_prevProps")),
+              t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_currentProps"))
             )
           ),
 
-          // All original non-return user code goes here
-          ...nonReturnStatements
-        ])
-      );
+          // __instance.__rsx_currentProps = arguments[0];
+          t.expressionStatement(
+            t.assignmentExpression(
+              "=",
+              t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_currentProps")),
+              t.memberExpression(t.identifier("arguments"), t.numericLiteral(0), /*computed*/ true)
+            )
+          )
+        ];
 
-      // ------------------------------------------------------------
-      // Replace the function body with:
-      //
-      //   let __rsx_initialized = false;
-      //   if (!__rsx_initialized) { ...init... }
-      //   return ...
-      //
-      // IMPORTANT:
-      // - We intentionally leave return statements untouched
-      // - We are *not* adding lifecycle hooks yet
-      // - We are *not* changing JSX semantics yet
-      // ------------------------------------------------------------
-      path.node.body.body = [
-        initFlagDecl,
-        initGuard,
-        ...returnStatements
-      ];
-    },
+        // ------------------------------------------------------------
+        // Phase 2: init-once guard stored on __instance.
+        //
+        // IMPORTANT: this fixes Phase 1's "local let __rsx_initialized"
+        // problem by persisting init state on the per-instance object.
+        //
+        // if (!__instance.__rsx_initialized) {
+        //   __instance.__rsx_initialized = true;
+        //   ...user init code...
+        // }
+        // ------------------------------------------------------------
+        const initGuard = t.ifStatement(
+          t.unaryExpression(
+            "!",
+            t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_initialized"))
+          ),
+          t.blockStatement([
+            // __instance.__rsx_initialized = true;
+            t.expressionStatement(
+              t.assignmentExpression(
+                "=",
+                t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_initialized")),
+                t.booleanLiteral(true)
+              )
+            ),
+
+            // user code that should run only once per instance
+            ...nonReturnStatements
+          ])
+        );
+
+        // ------------------------------------------------------------
+        // Replace the body:
+        //
+        // 1) Always track props each call (for later update wiring)
+        // 2) Run root code only once per instance
+        // 3) Keep return statements for now (we'll remove/normalize later)
+        // ------------------------------------------------------------
+        path.node.body.body = [
+          ...trackPropsStatements,
+          initGuard,
+          ...returnStatements
+        ];
+      },
       ExportDefaultDeclaration(path, state) {
         if (!state.rsx || state.skipRSX) return;
 
