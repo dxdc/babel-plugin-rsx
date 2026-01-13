@@ -144,14 +144,37 @@ module.exports = function ({ types: t }) {
             // lifecycle callback storage (wired in Phase 3+)
             t.objectProperty(t.identifier("__rsx_updateCb"), t.nullLiteral()),
             t.objectProperty(t.identifier("__rsx_viewCb"), t.nullLiteral()),
-            t.objectProperty(t.identifier("__rsx_destroyCb"), t.nullLiteral())
+            t.objectProperty(t.identifier("__rsx_destroyCb"), t.nullLiteral()),
+            t.objectProperty(t.identifier("__rsx_viewResult"), t.nullLiteral()),
+            t.objectProperty(t.identifier("__rsx_triggerRender"),t.nullLiteral()
+)
           );
 
           const initObject = t.objectExpression(initProps);
 
           const body = state.rsx.componentPath.get("body");
 
+          // Create the injected useState call *as a standalone node*
+          const injectedUseStateCall = t.callExpression(
+            t.identifier("useState"),
+            [t.numericLiteral(0)]
+          );
+
+          // Tag it so the ban rule can skip it
+          injectedUseStateCall.__rsxInjected = true;
+
           body.unshiftContainer("body", [
+            // const [, __rsxForceUpdate] = useState(0);
+            t.variableDeclaration("const", [
+              t.variableDeclarator(
+                t.arrayPattern([
+                  null, // destructuring hole (IMPORTANT: not t.nullLiteral())
+                  t.identifier("__rsxForceUpdate"),
+                ]),
+                injectedUseStateCall
+              ),
+            ]),
+
             // __instanceRef declaration
             t.variableDeclaration("const", [
               t.variableDeclarator(
@@ -194,52 +217,41 @@ module.exports = function ({ types: t }) {
                 )
               ),
             ]),
-          ]);
-          // Inject bindRender()
 
-          // Create the injected useState call *as a standalone node*
-          const injectedUseStateCall = t.callExpression(
-            t.identifier("useState"),
-            [t.numericLiteral(0)]
-          );
-
-          // Tag it so the ban rule can skip it
-          injectedUseStateCall.__rsxInjected = true;
-
-
-          body.unshiftContainer("body", [
-            // const [, __rsxForceUpdate] = useState(0);
-            t.variableDeclaration("const", [
-              t.variableDeclarator(
-                t.arrayPattern([
-                  null, // destructuring hole (IMPORTANT: not t.nullLiteral())
-                  t.identifier("__rsxForceUpdate"),
-                ]),
-                injectedUseStateCall
-              ),
-            ]),
-
-            // bindRender(() => __rsxForceUpdate(x => x + 1));
+            // Bind React's re-render mechanism to this RSX instance.
+            // We capture the stable React state updater via bindRender(),
+            // then store it on the instance so RSX-controlled render()
+            // can explicitly schedule React updates later.
             t.expressionStatement(
               t.callExpression(t.identifier("bindRender"), [
                 t.arrowFunctionExpression(
                   [],
-                  t.callExpression(t.identifier("__rsxForceUpdate"), [
-                    t.arrowFunctionExpression(
-                      [t.identifier("x")],
-                      t.binaryExpression("+", t.identifier("x"), t.numericLiteral(1))
-                    ),
+                  t.blockStatement([
+                    t.expressionStatement(
+                      t.assignmentExpression(
+                        "=",
+                        t.memberExpression(
+                          t.identifier("__instance"),
+                          t.identifier("__rsx_triggerRender")
+                        ),
+                        t.arrowFunctionExpression(
+                          [],
+                          t.callExpression(t.identifier("__rsxForceUpdate"), [
+                            t.arrowFunctionExpression(
+                              [t.identifier("x")],
+                              t.binaryExpression("+", t.identifier("x"), t.numericLiteral(1))
+                            ),
+                          ])
+                        )
+                      )
+                    )
                   ])
                 ),
               ])
-            ),
+            )
           ]);
-
-
         },
       },
-
-      // Capture the function component
       FunctionDeclaration(path, state) {
         // ------------------------------------------------------------
         // Only operate on the RSX root component.
@@ -247,16 +259,10 @@ module.exports = function ({ types: t }) {
         // ------------------------------------------------------------
         if (!state.rsx || state.skipRSX) return;
         if (path.node !== state.rsx.componentPath?.node) return;
-
-        // We only handle functions with block bodies:
-        //   function Foo() { ... }
-        // (arrow functions without blocks will be handled later)
         if (!t.isBlockStatement(path.node.body)) return;
 
         // ------------------------------------------------------------
-        // Capture original body (user-written statements).
-        // We still keep return statements for now (Phase 1 behavior),
-        // even though the new RSX model will later return only null/undefined.
+        // Split original user body into return vs non-return
         // ------------------------------------------------------------
         const originalBody = path.node.body.body;
 
@@ -267,21 +273,6 @@ module.exports = function ({ types: t }) {
           if (t.isReturnStatement(stmt)) returnStatements.push(stmt);
           else nonReturnStatements.push(stmt);
         }
-
-        // ------------------------------------------------------------
-        // Create an internal initialization flag:
-        //
-        //   let __rsx_initialized = false;
-        //
-        // This flag lives inside the component instance and is used
-        // to ensure the root code only executes once (init semantics).
-        // ------------------------------------------------------------
-        const initFlagDecl = t.variableDeclaration("let", [
-          t.variableDeclarator(
-            t.identifier("__rsx_initialized"),
-            t.booleanLiteral(false)
-          )
-        ]);
 
         // ------------------------------------------------------------
         // Phase 2: props tracking on every call.
@@ -321,7 +312,6 @@ module.exports = function ({ types: t }) {
         // close over __instance, and only STORE callbacks.
         // They do NOT execute anything yet.
         // ------------------------------------------------------------
-
         const updateFnDecl = t.functionDeclaration(
           t.identifier("update"),
           [t.identifier("fn")],
@@ -374,6 +364,72 @@ module.exports = function ({ types: t }) {
         );
 
         // ------------------------------------------------------------
+        // Render execution function (Phase 4)
+        // ------------------------------------------------------------
+        const renderFnDecl = t.functionDeclaration(
+          t.identifier("__rsx_render"),
+          [],
+          t.blockStatement([
+            t.ifStatement(
+              t.memberExpression(
+                t.identifier("__instance"),
+                t.identifier("__rsx_viewCb")
+              ),
+              t.blockStatement([
+                t.expressionStatement(
+                  t.assignmentExpression(
+                    "=",
+                    t.memberExpression(
+                      t.identifier("__instance"),
+                      t.identifier("__rsx_viewResult")
+                    ),
+                    t.callExpression(
+                      t.memberExpression(
+                        t.identifier("__instance"),
+                        t.identifier("__rsx_viewCb")
+                      ),
+                      [
+                        t.memberExpression(
+                          t.identifier("__instance"),
+                          t.identifier("__rsx_currentProps")
+                        )
+                      ]
+                    )
+                  )
+                )
+              ])
+            )
+          ])
+        );
+
+        const userRenderFnDecl = t.functionDeclaration(
+          t.identifier("render"),
+          [],
+          t.blockStatement([
+            t.expressionStatement(
+              t.callExpression(t.identifier("__rsx_render"), [])
+            ),
+            t.ifStatement(
+              t.memberExpression(
+                t.identifier("__instance"),
+                t.identifier("__rsx_triggerRender")
+              ),
+              t.blockStatement([
+                t.expressionStatement(
+                  t.callExpression(
+                    t.memberExpression(
+                      t.identifier("__instance"),
+                      t.identifier("__rsx_triggerRender")
+                    ),
+                    []
+                  )
+                )
+              ])
+            )
+          ])
+        );
+
+        // ------------------------------------------------------------
         // Phase 2: init-once guard (true constructor semantics)
         // ------------------------------------------------------------
         const initGuard = t.ifStatement(
@@ -394,27 +450,93 @@ module.exports = function ({ types: t }) {
             // --------------------------------------------------------
             // User code executes exactly once here
             // --------------------------------------------------------
-            ...nonReturnStatements
+            ...nonReturnStatements,
+            // NEW: render once on mount so view() output is produced immediately
+            t.expressionStatement(
+              t.callExpression(t.identifier("__rsx_render"), [])
+            )
           ])
         );
 
         // ------------------------------------------------------------
+        // Update + render execution (Phase 4)
+        //
+        // Runs on every call AFTER init
+        // ------------------------------------------------------------
+        const updateAndRender = t.ifStatement(
+          //
+          t.logicalExpression(
+            "&&",
+            t.logicalExpression(
+              "&&",
+              t.memberExpression(
+                t.identifier("__instance"),
+                t.identifier("__rsx_initialized")
+              ),
+              t.binaryExpression(
+                "!==",
+                t.memberExpression(
+                  t.identifier("__instance"),
+                  t.identifier("__rsx_prevProps")
+                ),
+                t.identifier("undefined")
+              )
+            ),
+            t.binaryExpression(
+              "!==",
+              t.memberExpression(
+                t.identifier("__instance"),
+                t.identifier("__rsx_prevProps")
+              ),
+              t.memberExpression(
+                t.identifier("__instance"),
+                t.identifier("__rsx_currentProps")
+              )
+            )
+          ),
+          //
+          t.blockStatement([
+            // call update(prev, current)
+            t.expressionStatement(
+              t.callExpression(
+                t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_updateCb")),
+                [
+                  t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_prevProps")),
+                  t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_currentProps"))
+                ]
+              )
+            ),
+
+            // auto render after update
+            t.expressionStatement(
+              t.callExpression(t.identifier("__rsx_render"), [])
+            )
+          ])
+        );
+        // ------------------------------------------------------------
         // Replace the function body
         // ------------------------------------------------------------
+        const finalReturn = t.returnStatement(
+          t.logicalExpression(
+            "??",
+            t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_viewResult")),
+            t.nullLiteral()
+          )
+        );
         path.node.body.body = [
-          // runs every call
           ...trackPropsStatements,
 
-          // lifecycle API (stable)
           updateFnDecl,
           viewFnDecl,
           destroyFnDecl,
+          renderFnDecl,
+          userRenderFnDecl,
 
-          // init-once execution
           initGuard,
+          updateAndRender,
 
-          // legacy return (will be removed later)
-          ...returnStatements
+          // NEW: RSX-owned return (discard user returns)
+          finalReturn
         ];
 
       },
@@ -446,27 +568,7 @@ module.exports = function ({ types: t }) {
         // Skip compiler internals
         if (isInternal(id.name)) return;
 
-        // ⚠️ WARNING: instance init derived from props
-        if (
-          init &&
-          (
-            referencesProps(init, t) ||
-            (
-              t.isIdentifier(init) &&
-              state.rsx.propBindings?.has(init.name)
-            )
-          )
-        ) {
-          console.warn(
-            path.buildCodeFrameError(
-              `[RSX] Warning: initializing instance state "${id.name}" from props.\n` +
-              "Instance initializers run before root code and may capture stale values.\n" +
-              "Move this logic into init() or update()."
-            ).message
-          );
-        }
-
-        // ✅ capture instance var (keep this)
+        // capture instance var (keep this)
         state.rsx.instanceVars.set(id.name, init);
 
         const decl = path.parentPath;
