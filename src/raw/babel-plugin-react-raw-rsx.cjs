@@ -59,24 +59,6 @@ function referencesProps(node, t) {
   return found;
 }
 
-function recordPropBindings(fnPath, state, t) {
-  const params = fnPath.node.params;
-  if (!params) return;
-
-  for (const param of params) {
-    if (!t.isObjectPattern(param)) continue;
-
-    for (const prop of param.properties) {
-      if (
-        t.isObjectProperty(prop) &&
-        t.isIdentifier(prop.value)
-      ) {
-        state.rsx.propBindings.add(prop.value.name);
-      }
-    }
-  }
-}
-
 
 module.exports = function ({ types: t }) {
   let bannedHooks;
@@ -100,9 +82,8 @@ module.exports = function ({ types: t }) {
           state.rsx = {
             instanceVars: new Map(),
             componentPath: null,
-            propBindings: new Set(), // 👈 REQUIRED
           };
-          ensureNamedImport(path, "react", ["useRef", "useState"], t);
+          ensureNamedImport(path, "react", ["useRef", "useState", "useEffect"], t);
           ensureNamedImport(path, "react-raw", ["bindRender"], t);
         },
 
@@ -250,6 +231,44 @@ module.exports = function ({ types: t }) {
               ])
             )
           ]);
+
+          // Add useEffect for cleanup/destroy callback
+          body.unshiftContainer("body", [
+            t.expressionStatement(
+              t.callExpression(t.identifier("useEffect"), [
+                t.arrowFunctionExpression(
+                  [],
+                  t.blockStatement([
+                    t.returnStatement(
+                      t.arrowFunctionExpression(
+                        [],
+                        t.blockStatement([
+                          t.ifStatement(
+                            t.memberExpression(
+                              t.identifier("__instance"),
+                              t.identifier("__rsx_destroyCb")
+                            ),
+                            t.blockStatement([
+                              t.expressionStatement(
+                                t.callExpression(
+                                  t.memberExpression(
+                                    t.identifier("__instance"),
+                                    t.identifier("__rsx_destroyCb")
+                                  ),
+                                  []
+                                )
+                              )
+                            ])
+                          )
+                        ])
+                      )
+                    )
+                  ])
+                ),
+                t.arrayExpression([])
+              ])
+            )
+          ]);
         },
       },
       FunctionDeclaration(path, state) {
@@ -260,6 +279,19 @@ module.exports = function ({ types: t }) {
         if (!state.rsx || state.skipRSX) return;
         if (path.node !== state.rsx.componentPath?.node) return;
         if (!t.isBlockStatement(path.node.body)) return;
+
+        // ------------------------------------------------------------
+        // Keep original function signature for React compatibility
+        // The outer function still receives props from React
+        // Transform params to match React component signature: (props, ref?)
+        // ------------------------------------------------------------
+        const hasSecondParam = path.node.params.length > 1;
+        
+        // Replace user's params with standard React params
+        path.node.params = [t.identifier("__reactProps")];
+        if (hasSecondParam) {
+          path.node.params.push(t.identifier("ref"));
+        }
 
         // ------------------------------------------------------------
         // Split original user body into return vs non-return
@@ -277,13 +309,7 @@ module.exports = function ({ types: t }) {
         // ------------------------------------------------------------
         // Phase 2: props tracking on every call.
         //
-        // Use arguments[0] so this works whether the user writes:
-        //   function Player(props) { ... }
-        // or:
-        //   function Player({score}) { ... }
-        //
-        // This gives us:
-        //   prevProps and currentProps for future update(prev, next).
+        // Extract props from React (__reactProps) and track changes
         // ------------------------------------------------------------
         const trackPropsStatements = [
           // __instance.__rsx_prevProps = __instance.__rsx_currentProps;
@@ -295,76 +321,109 @@ module.exports = function ({ types: t }) {
             )
           ),
 
-          // __instance.__rsx_currentProps = arguments[0];
+          // __instance.__rsx_currentProps = __reactProps;
           t.expressionStatement(
             t.assignmentExpression(
               "=",
               t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_currentProps")),
-              t.memberExpression(t.identifier("arguments"), t.numericLiteral(0), /*computed*/ true)
+              t.identifier("__reactProps")
             )
           )
         ];
 
         // ------------------------------------------------------------
-        // Phase 3: lifecycle registration APIs
-        //
-        // These functions are stable (created once),
-        // close over __instance, and only STORE callbacks.
-        // They do NOT execute anything yet.
+        // CREATE LIFECYCLE CONTEXT OBJECT
+        // This object is passed to the user function and provides
+        // stable references to lifecycle methods.
         // ------------------------------------------------------------
-        const updateFnDecl = t.functionDeclaration(
-          t.identifier("update"),
-          [t.identifier("fn")],
-          t.blockStatement([
-            t.expressionStatement(
-              t.assignmentExpression(
-                "=",
-                t.memberExpression(
-                  t.identifier("__instance"),
-                  t.identifier("__rsx_updateCb")
-                ),
-                t.identifier("fn")
+        const ctxObjectDecl = t.variableDeclaration("const", [
+          t.variableDeclarator(
+            t.identifier("__rsx_ctx"),
+            t.objectExpression([
+              // view(fn) { __instance.__rsx_viewCb = fn; }
+              t.objectMethod(
+                "method",
+                t.identifier("view"),
+                [t.identifier("fn")],
+                t.blockStatement([
+                  t.expressionStatement(
+                    t.assignmentExpression(
+                      "=",
+                      t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_viewCb")),
+                      t.identifier("fn")
+                    )
+                  )
+                ])
+              ),
+              // update(fn) { __instance.__rsx_updateCb = fn; }
+              t.objectMethod(
+                "method",
+                t.identifier("update"),
+                [t.identifier("fn")],
+                t.blockStatement([
+                  t.expressionStatement(
+                    t.assignmentExpression(
+                      "=",
+                      t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_updateCb")),
+                      t.identifier("fn")
+                    )
+                  )
+                ])
+              ),
+              // destroy(fn) { __instance.__rsx_destroyCb = fn; }
+              t.objectMethod(
+                "method",
+                t.identifier("destroy"),
+                [t.identifier("fn")],
+                t.blockStatement([
+                  t.expressionStatement(
+                    t.assignmentExpression(
+                      "=",
+                      t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_destroyCb")),
+                      t.identifier("fn")
+                    )
+                  )
+                ])
+              ),
+              // render() { __rsx_render(); if (__instance.__rsx_triggerRender) __instance.__rsx_triggerRender(); }
+              t.objectMethod(
+                "method",
+                t.identifier("render"),
+                [],
+                t.blockStatement([
+                  t.expressionStatement(
+                    t.callExpression(t.identifier("__rsx_render"), [])
+                  ),
+                  t.ifStatement(
+                    t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_triggerRender")),
+                    t.blockStatement([
+                      t.expressionStatement(
+                        t.callExpression(
+                          t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_triggerRender")),
+                          []
+                        )
+                      )
+                    ])
+                  )
+                ])
+              ),
+              // get props() { return __instance.__rsx_currentProps; }
+              t.objectMethod(
+                "get",
+                t.identifier("props"),
+                [],
+                t.blockStatement([
+                  t.returnStatement(
+                    t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_currentProps"))
+                  )
+                ])
               )
-            )
-          ])
-        );
-
-        const viewFnDecl = t.functionDeclaration(
-          t.identifier("view"),
-          [t.identifier("fn")],
-          t.blockStatement([
-            t.expressionStatement(
-              t.assignmentExpression(
-                "=",
-                t.memberExpression(
-                  t.identifier("__instance"),
-                  t.identifier("__rsx_viewCb")
-                ),
-                t.identifier("fn")
-              )
-            )
-          ])
-        );
-
-        const destroyFnDecl = t.functionDeclaration(
-          t.identifier("destroy"),
-          [t.identifier("fn")],
-          t.blockStatement([
-            t.expressionStatement(
-              t.assignmentExpression(
-                "=",
-                t.memberExpression(
-                  t.identifier("__instance"),
-                  t.identifier("__rsx_destroyCb")
-                ),
-                t.identifier("fn")
-              )
-            )
-          ])
-        );
+            ])
+          )
+        ]);
 
         // ------------------------------------------------------------
-        // Render execution function (Phase 4)
+        // __rsx_render internal function (called by render())
         // ------------------------------------------------------------
         const renderFnDecl = t.functionDeclaration(
           t.identifier("__rsx_render"),
@@ -402,35 +461,9 @@ module.exports = function ({ types: t }) {
           ])
         );
 
-        const userRenderFnDecl = t.functionDeclaration(
-          t.identifier("render"),
-          [],
-          t.blockStatement([
-            t.expressionStatement(
-              t.callExpression(t.identifier("__rsx_render"), [])
-            ),
-            t.ifStatement(
-              t.memberExpression(
-                t.identifier("__instance"),
-                t.identifier("__rsx_triggerRender")
-              ),
-              t.blockStatement([
-                t.expressionStatement(
-                  t.callExpression(
-                    t.memberExpression(
-                      t.identifier("__instance"),
-                      t.identifier("__rsx_triggerRender")
-                    ),
-                    []
-                  )
-                )
-              ])
-            )
-          ])
-        );
-
         // ------------------------------------------------------------
         // Phase 2: init-once guard (true constructor semantics)
+        // User code receives context via parameters, not scope injection
         // ------------------------------------------------------------
         const initGuard = t.ifStatement(
           t.unaryExpression(
@@ -448,14 +481,40 @@ module.exports = function ({ types: t }) {
             ),
 
             // --------------------------------------------------------
-            // User code executes exactly once here
+            // Call user function with context object
             // --------------------------------------------------------
-            ...nonReturnStatements,
+            t.expressionStatement(
+              t.callExpression(
+                t.memberExpression(t.identifier("__userInit"), t.identifier("call")),
+                [
+                  t.thisExpression(),
+                  t.identifier("__rsx_ctx")
+                ]
+              )
+            ),
+            
             // NEW: render once on mount so view() output is produced immediately
             t.expressionStatement(
               t.callExpression(t.identifier("__rsx_render"), [])
             )
           ])
+        );
+
+        // ------------------------------------------------------------
+        // Wrap user code in a function to call with context
+        // ------------------------------------------------------------
+        const userInitFn = t.functionDeclaration(
+          t.identifier("__userInit"),
+          [
+            t.objectPattern([
+              t.objectProperty(t.identifier("view"), t.identifier("view"), false, true),
+              t.objectProperty(t.identifier("update"), t.identifier("update"), false, true),
+              t.objectProperty(t.identifier("destroy"), t.identifier("destroy"), false, true),
+              t.objectProperty(t.identifier("render"), t.identifier("render"), false, true),
+              t.objectProperty(t.identifier("props"), t.identifier("props"), false, true),
+            ])
+          ],
+          t.blockStatement(nonReturnStatements)
         );
 
         // ------------------------------------------------------------
@@ -523,14 +582,13 @@ module.exports = function ({ types: t }) {
             t.nullLiteral()
           )
         );
+        
         path.node.body.body = [
           ...trackPropsStatements,
 
-          updateFnDecl,
-          viewFnDecl,
-          destroyFnDecl,
+          ctxObjectDecl,
           renderFnDecl,
-          userRenderFnDecl,
+          userInitFn,
 
           initGuard,
           updateAndRender,
@@ -551,7 +609,7 @@ module.exports = function ({ types: t }) {
           decl.isArrowFunctionExpression()
         ) {
           state.rsx.componentPath = decl;
-          recordPropBindings(decl, state, t);
+          // No longer need to record prop bindings since props is explicit
         }
       },
 
@@ -618,12 +676,7 @@ module.exports = function ({ types: t }) {
          * root scope is reactive and instance initialization
          * happens earlier.
          */
-        const rhsIsPropDerived =
-          referencesProps(right, t) ||
-          (
-            t.isIdentifier(right) &&
-            state.rsx.propBindings?.has(right.name)
-          );
+        const rhsIsPropDerived = referencesProps(right, t);
 
         if (rhsIsPropDerived) {
           console.warn(
@@ -665,6 +718,12 @@ module.exports = function ({ types: t }) {
 
         // Do not rewrite compiler internals
         if (name === "__instance") return;
+
+        // Do not rewrite lifecycle function names - they are parameters now
+        if (name === "view" || name === "update" || name === "destroy" || 
+            name === "render" || name === "props") {
+          return;
+        }
 
         // Only rewrite captured instance vars
         if (!state.rsx.instanceVars.has(name)) return;

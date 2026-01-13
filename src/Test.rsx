@@ -1,6 +1,7 @@
-// Note: render() is provided by the RSX compiler, no import needed
+// Note: lifecycle functions (view, update, destroy, render) and props
+// are passed explicitly as parameters
 
-export default function Test(props) {
+export default function Test({ view, update, destroy, render, props }) {
   console.log("INIT once per instance");
 
   let counter = props.count;
@@ -11,15 +12,20 @@ export default function Test(props) {
     render();
     
   }
+  destroy(() => {
+    console.log("DESTROY");
+  });
   update((prev, current) => {
     console.log("UPDATE", prev, "→", current);
+    //counter = current.count;
   });
 
   view((current) => {
     console.log("VIEW", current, "counter =", counter); 
     return (
     <>
-      <button onClick={handleClick}>Count: {counter} {current.count}</button>
+      <div>count: {current.count}</div>
+      <button onClick={handleClick}>Count: {counter}</button>
     </>
   );
   });

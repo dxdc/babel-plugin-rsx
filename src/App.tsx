@@ -93,7 +93,7 @@ function App() {
         {/* <Test label="Counter" /> */}
         {/* <HighResTimer></HighResTimer>
         <HighResTimerRT></HighResTimerRT> */}
-        <Test count={count}></Test>
+        {count % 2 === 0 && <Test count={count}></Test>}
         <a href="https://vite.dev" target="_blank">
           <img src={viteLogo} className="logo" alt="Vite logo" />
         </a>
