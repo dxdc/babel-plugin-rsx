@@ -1,104 +1,271 @@
-# RSX
+# RSX — On‑Demand Rendered Components
 
-**RSX** is a deterministic, model-driven UI runtime that looks like JSX but behaves like plain JavaScript.
+**RSX** is a component model designed for **real‑time and imperative workloads** where React’s state, effects, and memoization layers become accidental complexity.
 
-If you’ve ever fought React’s lifecycle, StrictMode double-effects, or hook-induced complexity — RSX is the opposite of that.
+> **RSX = On‑Demand Rendered Components**
+> You decide *when* rendering happens.
 
-> **No hooks. No component instances. No hidden lifecycles.  
-Just state, render, and control.**
+RSX components look familiar to React developers, but behave very differently under the hood. They eliminate the need for hooks entirely—**including `useState`, `useEffect`, `useCallback`, `useMemo`, and `useRef`**—by making rendering an explicit operation instead of a side‑effect of state changes.
 
 ---
 
-## Why RSX?
+## Why RSX Exists
 
-Modern UI frameworks optimize for convenience — RSX optimizes for **control**.
+React excels at **declarative UI driven by application state**. But many real‑time systems are **not state‑driven UIs**:
 
-RSX treats UI as a **pure projection of a model**, not a web of implicit lifecycles.
- 
-## Why RSX Helps with Hook-Heavy Components
+* Timers, clocks, and stopwatches
+* Game loops and input polling
+* Media processing (audio/video analysis)
+* Hardware and device bridges
+* Animation engines and render pipelines
+* High‑frequency data streams
 
-Components that interface with **timers, events, real-time systems, or hardware** often become dominated by `useCallback`, `useMemo`, and `useRef` when written in React. These hooks aren’t adding new capabilities — they are compensating for React’s render and lifecycle model.
+In these domains, React often forces developers into patterns like:
 
-React re-runs components frequently and implicitly. As a result:
+* Deep `useEffect` chains
+* `useCallback` for “stability”
+* `useMemo` to fight re‑execution
+* `useRef` as escape hatches
+* Logic hidden inside custom hooks
 
-- Functions are recreated on every render, requiring `useCallback`
-- Expensive computations must be guarded with `useMemo`
-- Long-lived resources are detached from component instances using `useRef`
-- Timers and event handlers must survive re-renders without breaking identity
-- Correctness depends on dependency arrays and identity stabilization
+The result is **indirect control**, harder reasoning, and fragile behavior.
 
-This leads to complex and fragile code, especially for real-time or hardware-driven systems.
+RSX flips this model.
 
-RSX removes the root cause.
+
+
+### Basic Structure
+
+```jsx
+export default function Example(ctx) {
+
+  // Everything in this scope runs exactly once on 
+  // mount and persists for the duration of the component.
+
+  // life cycle methods from the ctx param
+  const {view, update, destroy, render} = ctx;
+  
+    // Initial props snapshot (mount only)
+  const initialProps = ctx.props;
+
+  // Persistent state
+  let value = 0;
+
+  function increment() {
+    value++;
+    render(); // explicit re-render
+  }
+
+  view((props)=>{
+    // The render function
+    return <button onClick={increment}>{value}</button>;
+  });
+
+  update((prevProps, nextProps) => {
+    // runs when props change
+  });
+
+  destroy(() => {
+    // runs once on unmount
+  });
+}
+```
+
+## Simple RSX Example: Timeout-Based Update
+
+This example shows where RSX shines: **imperative, time-driven updates** without hooks, effects, or memoization.
+
+### RSX Component
+
+```jsx
+export default function TimeoutExample({view, render}) {
+
+  let message = "Waiting...";
+
+  // run once on mount
+  setTimeout(() => {
+    message = "Done!";
+    render(); // explicit re-render
+  }, 1000);
+
+  view(()=>{
+    return <div>{message}</div>;
+  })
+}
+
+```
+
+## The Core Idea: Render On Demand
 
 In RSX:
 
-- Rendering happens only when you explicitly call `render()`
-- Models and refs live at module scope and persist naturally
-- Functions do not require identity stabilization
-- Timers, event listeners, and hardware interfaces are initialized once and owned explicitly
-- Cleanup is intentional and controlled, not implicit
+* **Rendering is explicit**
+* **Logic runs once**, not on every re‑render
+* **Local variables behave like real variables**
+* **You call `render()` only when output must change**
 
-For real-time systems and hardware integration, this results in:
+There is no implicit reactivity.
 
-- Fewer abstractions
-- Clear ownership of resources
-- Deterministic behavior
-- Code that is easier to reason about and debug
+> If nothing meaningful changed, nothing renders.
 
-> **RSX doesn’t replace hooks — it makes most of them unnecessary.**
-
-
-### RSX is for you if you want:
-- Deterministic initialization
-- Explicit state ownership
-- Zero magic re-renders
-- Debuggable behavior
-- Tight control over resources
+This matches how real‑time systems already work.
 
 ---
 
-## What RSX Is (and Isn’t)
+## Why RSX Needs No Hooks (Including `memo`)
 
-### RSX **is**
-- A JSX-like syntax
-- A render-on-demand UI system
-- Model-driven
-- Explicit lifecycle
-- Single-pass rendering
-- Extremely predictable
+Hooks exist to compensate for **React’s re‑execution model**:
 
-### RSX **is not**
-- React
-- Hook-based
-- Instance-based
-- Lifecycle-driven
-- Reactive by default
+| React Hook    | Why It Exists                 |
+| ------------- | ----------------------------- |
+| `useState`    | Triggers renders indirectly   |
+| `useEffect`   | Run code *after* render       |
+| `useCallback` | Prevent identity churn        |
+| `useMemo`     | Prevent recomputation         |
+| `useRef`      | Persist values across renders |
+
+RSX removes the root cause:
+
+* The component function does **not re‑execute** on updates
+* Variables persist naturally
+* Side‑effects are just normal code
+* Updates are intentional
+
+Because nothing re‑runs implicitly:
+
+* `memo` is unnecessary
+* `callback` stability is irrelevant
+* dependency arrays disappear
+
+There is nothing to “optimize around.”
 
 ---
 
-## Core Mental Model
+## What Types of Components Are Perfect for RSX
+
+RSX shines where **imperative control beats declarative diffusion**.
+
+### Ideal Use Cases
+
+* **Timers & schedulers**
+* **Animation loops** (`requestAnimationFrame`)
+* **Gamepad, MIDI, HID, or sensor input**
+* **Audio / video analysis**
+* **Streaming or polling systems**
+* **Canvas / WebGL / WebGPU renderers**
+* **Electron IPC bridges**
+* **High‑frequency UI updates**
+
+If a component:
+
+* Does work continuously
+* Talks to hardware or external systems
+* Maintains internal mutable state
+* Should *not* re‑run on every parent render
+
+…it’s likely a strong RSX candidate.
+
+---
+
+## Designed to Be Used *With* React
+
+RSX is **not a replacement for React**.
+
+It is meant to be **sprinkled into existing JSX projects**:
+
+* Use React for layouts, routing, forms, and data fetching
+* Use RSX for hot paths and real‑time subsystems
+
+RSX components:
+
+* Mount inside normal React trees
+* Coexist with JSX components
+* Do not affect React’s mental model elsewhere
+
+Think of RSX as:
+
+> **A precision tool inside a declarative framework**
+
+---
+
+## Works Natively with TypeScript
+
+RSX supports TypeScript end‑to‑end:
+
+* Typed props
+* Typed local state
+* Typed helpers and APIs
+* Full IDE inference
+
+Because RSX avoids hook indirection:
+
+* Types are flatter
+* Control flow is obvious
+* Fewer generics and wrapper types
+
+The result is **clearer typings with less ceremony**.
+
+---
+
+## Easier to Read, Easier for AI to Write
+
+RSX code is:
+
+* Linear
+* Explicit
+* Single‑pass
+
+There are no hidden lifecycles, no dependency arrays, and no hook rules.
+
+This makes RSX:
+
+* Easier for humans to reason about
+* **Far less error‑prone when generated by AI**
+
+AI systems struggle with:
+
+* Hook ordering rules
+* Dependency correctness
+* Memoization correctness
+* Effect timing
+
+RSX removes these failure modes entirely.
+
+> What you see is what runs.
+
+---
+
+## Mental Model Summary
+
+| React                  | RSX                      |
+| ---------------------- | ------------------------ |
+| State‑driven           | Event‑driven             |
+| Implicit re‑execution  | Explicit rendering       |
+| Hooks manage lifetimes | Code manages itself      |
+| Optimization via memo  | No optimization required |
+
+---
 
 
 
-```js
-import { render } from "rsx";
 
-const model = {
-  count: 0,
-};
 
-function inc() {
-  model.count++;
-  render();
-}
+## When to Avoid RSX
 
-export function App() {
-  return (
-    <button onClick={inc}>
-      Count: {model.count}
-    </button>
-  );
-}
+RSX is not a general replacement for React. Prefer JSX + hooks when:
 
-render(<App />);
+- The component is mostly **declarative UI** (forms, lists, layout, content)
+- UI is **derived from app or server state**
+- Updates are **infrequent or user-driven**
+- The component is meant to be **highly composable or generic**
+- React’s **conventions and consistency** are more important than control
+
+## Rule of Thumb
+
+- Use **React** when state *describes* the UI  
+- Use **RSX** when events or time *drive* the UI
+
+> RSX works best **selectively**, alongside React — not everywhere.
+
+
+
