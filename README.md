@@ -174,17 +174,24 @@ RSX is **not a replacement for React**.
 It is meant to be **sprinkled into existing JSX projects**:
 
 * Use React for layouts, routing, forms, and data fetching
-* Use RSX for hot paths and real‑time subsystems
+* Use RSX for hot paths and real‑time subsystems 
+
+
+```jsx
+import ReactComponet from 'ReactComponet.tsx'
+import RsxComponet from 'RsxComponet.rsx'
+...
+<div>
+ <ReactComponet name={hello world}/>
+ <RsxComponet name={hello world}/>
+</div>
+```
 
 RSX components:
 
 * Mount inside normal React trees
 * Coexist with JSX components
 * Do not affect React’s mental model elsewhere
-
-Think of RSX as:
-
-> **A precision tool inside a declarative framework**
 
 ---
 
@@ -247,9 +254,6 @@ RSX removes these failure modes entirely.
 ---
 
 
-
-
-
 ## When to Avoid RSX
 
 RSX is not a general replacement for React. Prefer JSX + hooks when:
@@ -259,13 +263,5 @@ RSX is not a general replacement for React. Prefer JSX + hooks when:
 - Updates are **infrequent or user-driven**
 - The component is meant to be **highly composable or generic**
 - React’s **conventions and consistency** are more important than control
-
-## Rule of Thumb
-
-- Use **React** when state *describes* the UI  
-- Use **RSX** when events or time *drive* the UI
-
-> RSX works best **selectively**, alongside React — not everywhere.
-
 
 
