@@ -1,5 +1,5 @@
 {
-  "name": "babel-plugin-yourname",
+  "name": "babel-plugin-rsx",
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",

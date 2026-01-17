@@ -46,18 +46,9 @@ export default defineConfig({
       babel: {
         plugins: [
           // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require("../src/babel-plugin-react-raw-rsx.cjs"),
+          require("../src/babel-plugin-rsx.cjs"),
         ],
       },
     }),
-  ],
-  server: {
-    proxy: {
-      "/api": {
-        target: "https://data-bass.com",
-        changeOrigin: true,
-        secure: false,
-      },
-    },
-  },
+  ]
 })

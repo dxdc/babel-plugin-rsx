@@ -7,8 +7,8 @@
 
 RSX components look familiar to React developers, but behave very differently under the hood. They eliminate the need for hooks entirely—**including `useState`, `useEffect`, `useCallback`, `useMemo`, and `useRef`**—by making rendering an explicit operation instead of a side‑effect of state changes.
 
----
 
+---
 ## Why RSX Exists
 
 React excels at **declarative UI driven by application state**. But many real‑time systems are **not state‑driven UIs**:
@@ -71,29 +71,162 @@ export default function Example(ctx) {
 }
 ```
 
-## Simple RSX Example: Timeout-Based Update
+---
+## How to Setup
 
-This example shows where RSX shines: **imperative, time-driven updates** without hooks, effects, or memoization.
+### 1. Install the Package
 
-### RSX Component
+```bash
+npm install babel-plugin-rsx
+```
 
-```jsx
-export default function TimeoutExample({view, render}) {
+### 2. Configure Babel
 
-  let message = "Waiting...";
+Add the plugin to your Babel configuration. Choose the setup that matches your bundler:
 
-  // run once on mount
-  setTimeout(() => {
-    message = "Done!";
-    render(); // explicit re-render
-  }, 1000);
+#### Option A: Babel Config (works with any bundler)
 
-  view(()=>{
-    return <div>{message}</div>;
-  })
+Create or update your `babel.config.js`:
+
+```javascript
+module.exports = {
+  presets: [
+    "@babel/preset-react",
+    "@babel/preset-typescript" // if using TypeScript
+  ],
+  plugins: [
+    "babel-plugin-rsx"
+  ],
+  // Ensure .rsx files are processed
+  overrides: [
+    {
+      test: /\.rsx$/,
+      presets: [["@babel/preset-react", { runtime: "automatic" }]]
+    }
+  ]
+};
+```
+
+#### Option B: Webpack
+
+```javascript
+// webpack.config.js
+module.exports = {
+  resolve: {
+    extensions: ['.js', '.jsx', '.ts', '.tsx', '.rsx']
+  },
+  module: {
+    rules: [
+      {
+        test: /\.(js|jsx|ts|tsx|rsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: [
+              '@babel/preset-react',
+              '@babel/preset-typescript'
+            ],
+            plugins: ['babel-plugin-rsx']
+          }
+        }
+      }
+    ]
+  }
+};
+```
+
+#### Option C: Vite
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { rsxPlugin } from 'babel-plugin-rsx/vite'
+
+export default defineConfig({
+  resolve: {
+    extensions: [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json", ".rsx"],
+  },
+  plugins: [
+    rsxPlugin(),
+    react({
+      include: /\.(jsx|tsx|rsx)$/,
+      babel: {
+        plugins: [require("babel-plugin-rsx")],
+      },
+    }),
+  ],
+})
+```
+
+### 3. Optional Add TypeScript Support
+
+Add the RSX types to your `tsconfig.json`:
+
+```jsonc
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["babel-plugin-rsx/types"]
+  }
+}
+```
+
+This provides full type support for `.rsx` files, including the `Ctx` type with `view`, `update`, `render`, `destroy`, and `props`.
+
+You can also import the types directly if needed:
+
+```typescript
+import type { Ctx } from 'babel-plugin-rsx';
+
+interface MyProps {
+  name: string;
 }
 
+export default function MyComponent({ view, render, props }: Ctx<MyProps>) {
+  // ...
+}
 ```
+
+### 4. Create Your First RSX Component
+
+Create a file with the `.rsx` extension:
+
+```jsx
+// Counter.rsx
+export default function Counter({ view, render }) {
+  let count = 0;
+
+  function increment() {
+    count++;
+    render();
+  }
+
+  view((props) => (
+    <>
+      <label>{props.name}</label>
+      <button onClick={increment}>Count: {count}</button>
+    </>
+  ));
+}
+```
+
+### 5. Use It in Your React App
+
+```tsx
+import Counter from './Counter.rsx';
+
+function App() {
+  return (
+    <div>
+      <h1>My App</h1>
+      <Counter name="Count clicks" />
+    </div>
+  );
+}
+```
+
 
 ## The Core Idea: Render On Demand
 
@@ -141,7 +274,7 @@ There is nothing to “optimize around.”
 
 ---
 
-## What Types of Components Are Perfect for RSX
+## What Types of React Components Are Perfect for RSX conversion?
 
 RSX shines where **imperative control beats declarative diffusion**.
 
@@ -161,7 +294,9 @@ If a component:
 * Does work continuously
 * Talks to hardware or external systems
 * Maintains internal mutable state
+* Uses many `useRefs` as escape hatches and `useCallbacks` for stabilization 
 * Should *not* re‑run on every parent render
+* Has tangled or deeply nested `useEffect` chains
 
 …it’s likely a strong RSX candidate.
 
@@ -265,3 +400,6 @@ RSX is not a general replacement for React. Prefer JSX + hooks when:
 - React’s **conventions and consistency** are more important than control
 
 
+## Further Reading
+- [RSX Component Execution & Lifecycle Specification](docs/RSX_Semantics.md)
+- [Common RSX Examples](docs/examples.md)
