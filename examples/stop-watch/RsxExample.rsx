@@ -1,7 +1,4 @@
-
-export default function RsxTimer(
-  { view, update, render, destroy, props }
-) {
+export default function RsxTimer({ view, update, render, destroy, props }) {
   // ------------------------------------------------------------
   // Persistent instance state
   // ------------------------------------------------------------
@@ -15,18 +12,17 @@ export default function RsxTimer(
   let targetFrameMs = 16; // ~60fps default
   let accumulatedMs = 0;
 
-  if (props.running) {
-    start();
-  }
-
   // ------------------------------------------------------------
   // View (pure projection)
   // ------------------------------------------------------------
   view((props) => {
+    if (props.onRenderStart) {
+      props.onRenderStart();
+    }
     const currentValue = elapsedMs.toFixed(1);
 
-    return (
-      <div style={{ fontFamily: "monospace", width: 280 }}>
+    const result = (
+      <div style={{ fontFamily: "monospace", width: 280, textAlign: "center" }}>
         <h3>{props.label}</h3>
 
         <div
@@ -67,23 +63,29 @@ export default function RsxTimer(
             marginTop: 10,
           }}
         >
-          <button onClick={increaseFrameRate}>
-            Increase Frame Rate
-          </button>
-          <button onClick={decreaseFrameRate}>
-            Decrease Frame Rate
-          </button>
+          <button onClick={increaseFrameRate}>Increase Frame Rate</button>
+          <button onClick={decreaseFrameRate}>Decrease Frame Rate</button>
         </div>
       </div>
     );
+
+    // Track render time if callback provided
+    if (props.onRenderEnd) {
+      props.onRenderEnd();
+    }
+
+    return result;
   });
 
   // ------------------------------------------------------------
   // Update (prop-driven reactions)
   // ------------------------------------------------------------
   update((prev, next) => {
-    if (prev.running !== next.running) {
-      next.running ? start() : stop();
+    if (!prev?.running && next?.running) {
+      reset();
+      start();
+    } else if (prev?.running && !next?.running) {
+      stop();
     }
   });
 

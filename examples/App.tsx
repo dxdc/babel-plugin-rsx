@@ -8,9 +8,10 @@ import { getFilename, getSourceCode } from "./utils/sourceLoader";
  * For now we statically register examples.
  * Later this can be auto-generated via Vite glob imports.
  */
+import timerManifest from "./stop-watch/manifest.json";
+import PerformanceTest from "./stop-watch/PerformanceTest.tsx";
 import ReactTimer from "./stop-watch/ReactExample.tsx";
 import RsxTimer from "./stop-watch/RsxExample.rsx";
-import timerManifest from "./stop-watch/manifest.json";
 
 type Example = {
   id: string;
@@ -18,6 +19,7 @@ type Example = {
   description: string;
   Rsx: React.ComponentType<Record<string, unknown>>;
   React: React.ComponentType<Record<string, unknown>>;
+  standalone?: boolean;
 };
 
 const EXAMPLES: Example[] = [
@@ -27,6 +29,14 @@ const EXAMPLES: Example[] = [
     description: timerManifest.description,
     Rsx: RsxTimer,
     React: ReactTimer,
+  },
+  {
+    id: "performance-test",
+    name: "Performance Test",
+    description: "Benchmark React vs RSX render performance",
+    Rsx: PerformanceTest,
+    React: PerformanceTest,
+    standalone: true,
   },
 ];
 
@@ -69,6 +79,14 @@ export default function App() {
 /* -------------------------------------------------- */
 
 function ExampleView({ example }: { example: Example }) {
+  if (example.standalone) {
+    return (
+      <div className={styles.example} style={{ gridTemplateColumns: "1fr" }}>
+        <example.Rsx />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.example}>
       <Panel title="RSX" Component={example.Rsx} exampleId={example.id} type="rsx" />

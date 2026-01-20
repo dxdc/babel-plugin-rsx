@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import ReactTimer from "./ReactExample.tsx";
 import RsxTimer from "./RsxExample.rsx";
 
@@ -50,15 +50,6 @@ function usePerfTracker(label: string) {
   return { onRenderStart, onRenderEnd, getMetrics, reset, label };
 }
 
-// Wrapper to track React component renders
-function TrackedReactTimer({ running, onRender }: { running: boolean; onRender: () => void }) {
-  useEffect(() => {
-    onRender();
-  });
-
-  return <ReactTimer running={running} />;
-}
-
 export default function PerformanceTest() {
   const [running, setRunning] = useState(false);
   const [instanceCount, setInstanceCount] = useState(1);
@@ -71,13 +62,10 @@ export default function PerformanceTest() {
   const reactTracker = usePerfTracker("React");
   const rsxTracker = usePerfTracker("RSX");
 
-  const rsxRenderCountRef = useRef(0);
-
   const runTest = useCallback(() => {
     // Reset metrics
     reactTracker.reset();
     rsxTracker.reset();
-    rsxRenderCountRef.current = 0;
     setResults(null);
 
     // Start timers
@@ -91,23 +79,14 @@ export default function PerformanceTest() {
       setTimeout(() => {
         setResults({
           react: reactTracker.getMetrics(),
-          rsx: {
-            ...rsxTracker.getMetrics(),
-            renderCount: rsxRenderCountRef.current,
-          },
+          rsx: rsxTracker.getMetrics(),
         });
       }, 100);
     }, testDuration * 1000);
   }, [testDuration, reactTracker, rsxTracker]);
 
-  // Track RSX renders via a ref callback approach
-  // eslint-disable-next-line no-unused-vars
-  const _trackRsxRender = useCallback(() => {
-    rsxRenderCountRef.current++;
-  }, []);
-
   return (
-    <div style={{ padding: 20, fontFamily: "system-ui" }}>
+    <div style={{ padding: 20, fontFamily: "system-ui", color: "inherit" }}>
       <h1>Performance Test: React vs RSX</h1>
 
       {/* Controls */}
@@ -154,7 +133,7 @@ export default function PerformanceTest() {
           style={{
             marginBottom: 20,
             padding: 16,
-            background: "#f5f5f5",
+            background: "rgba(128, 128, 128, 0.1)",
             borderRadius: 8,
           }}
         >
@@ -165,16 +144,16 @@ export default function PerformanceTest() {
             <thead>
               <tr style={{ borderBottom: "2px solid #333" }}>
                 <th style={{ textAlign: "left", padding: 8 }}>Metric</th>
-                <th style={{ textAlign: "right", padding: 8 }}>React</th>
                 <th style={{ textAlign: "right", padding: 8 }}>RSX</th>
+                <th style={{ textAlign: "right", padding: 8 }}>React</th>
                 <th style={{ textAlign: "right", padding: 8 }}>Difference</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td style={{ padding: 8 }}>Render Count</td>
-                <td style={{ textAlign: "right", padding: 8 }}>{results.react.renderCount}</td>
                 <td style={{ textAlign: "right", padding: 8 }}>{results.rsx.renderCount}</td>
+                <td style={{ textAlign: "right", padding: 8 }}>{results.react.renderCount}</td>
                 <td style={{ textAlign: "right", padding: 8 }}>
                   {results.react.renderCount - results.rsx.renderCount}
                 </td>
@@ -182,10 +161,10 @@ export default function PerformanceTest() {
               <tr>
                 <td style={{ padding: 8 }}>Avg Render Time (ms)</td>
                 <td style={{ textAlign: "right", padding: 8 }}>
-                  {results.react.avgRenderTime.toFixed(3)}
+                  {results.rsx.avgRenderTime.toFixed(3)}
                 </td>
                 <td style={{ textAlign: "right", padding: 8 }}>
-                  {results.rsx.avgRenderTime.toFixed(3)}
+                  {results.react.avgRenderTime.toFixed(3)}
                 </td>
                 <td style={{ textAlign: "right", padding: 8 }}>
                   {(results.react.avgRenderTime - results.rsx.avgRenderTime).toFixed(3)}
@@ -194,10 +173,10 @@ export default function PerformanceTest() {
               <tr>
                 <td style={{ padding: 8 }}>Total Render Time (ms)</td>
                 <td style={{ textAlign: "right", padding: 8 }}>
-                  {results.react.totalRenderTime.toFixed(2)}
+                  {results.rsx.totalRenderTime.toFixed(2)}
                 </td>
                 <td style={{ textAlign: "right", padding: 8 }}>
-                  {results.rsx.totalRenderTime.toFixed(2)}
+                  {results.react.totalRenderTime.toFixed(2)}
                 </td>
                 <td style={{ textAlign: "right", padding: 8 }}>
                   {(results.react.totalRenderTime - results.rsx.totalRenderTime).toFixed(2)}
@@ -209,21 +188,51 @@ export default function PerformanceTest() {
       )}
 
       {/* Side-by-side timers */}
-      <div style={{ display: "flex", gap: 40 }}>
-        <div>
-          <h3>React Timer ({instanceCount}x)</h3>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+      <div style={{ display: "flex", gap: 60, justifyContent: "center" }}>
+        <div
+          style={{
+            padding: 24,
+            background: "rgba(128, 128, 128, 0.05)",
+            borderRadius: 12,
+            minWidth: 320,
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: 16, textAlign: "center" }}>
+            RSX Timer {instanceCount > 1 ? `(${instanceCount}x)` : ""}
+          </h3>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "center" }}>
             {Array.from({ length: instanceCount }).map((_, i) => (
-              <TrackedReactTimer key={i} running={running} onRender={reactTracker.onRenderEnd} />
+              <RsxTimer
+                key={i}
+                running={running}
+                label={instanceCount > 1 ? `RSX #${i + 1}` : "RSX"}
+                onRenderStart={rsxTracker.onRenderStart}
+                onRenderEnd={rsxTracker.onRenderEnd}
+              />
             ))}
           </div>
         </div>
 
-        <div>
-          <h3>RSX Timer ({instanceCount}x)</h3>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+        <div
+          style={{
+            padding: 24,
+            background: "rgba(128, 128, 128, 0.05)",
+            borderRadius: 12,
+            minWidth: 320,
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: 16, textAlign: "center" }}>
+            React Timer {instanceCount > 1 ? `(${instanceCount}x)` : ""}
+          </h3>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "center" }}>
             {Array.from({ length: instanceCount }).map((_, i) => (
-              <RsxTimer key={i} running={running} label={`RSX #${i + 1}`} />
+              <ReactTimer
+                key={i}
+                running={running}
+                label={instanceCount > 1 ? `React #${i + 1}` : "React"}
+                onRenderStart={reactTracker.onRenderStart}
+                onRenderEnd={reactTracker.onRenderEnd}
+              />
             ))}
           </div>
         </div>
@@ -234,7 +243,7 @@ export default function PerformanceTest() {
         style={{
           marginTop: 40,
           padding: 16,
-          background: "#e8f4fd",
+          background: "rgba(100, 150, 255, 0.1)",
           borderRadius: 8,
         }}
       >

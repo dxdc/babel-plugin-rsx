@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 interface HighResTimerReactProps {
   label?: string;
   running?: boolean; // optional external control
+  onRenderStart?: () => void;
+  onRenderEnd?: () => void;
 }
 
 export default function ReactTimer({
   label = "React Timer",
   running: runningProp,
+  onRenderStart,
+  onRenderEnd,
 }: HighResTimerReactProps) {
   // ------------------------------------------------------------
   // React state
@@ -25,6 +29,23 @@ export default function ReactTimer({
   const accumulatedMsRef = useRef(0);
   const rafIdRef = useRef<number | null>(null);
   const targetFrameMsRef = useRef(16); // ~60fps
+
+  const resetCounters = () => {
+    accumulatedMsRef.current = 0;
+
+    setElapsedMs(0);
+    setFrameMs(0);
+    setFrameCount(0);
+
+    const now = performance.now();
+    startMsRef.current = now;
+    lastMsRef.current = now;
+  };
+
+  const reset = () => {
+    setRunning(false);
+    resetCounters();
+  };
 
   // ------------------------------------------------------------
   // Sync external running prop (optional)
@@ -54,9 +75,8 @@ export default function ReactTimer({
     }
 
     if (running && rafIdRef.current === null) {
-      const now = performance.now();
-      startMsRef.current = now;
-      lastMsRef.current = now;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      resetCounters();
 
       rafIdRef.current = requestAnimationFrame(loop);
     }
@@ -83,20 +103,6 @@ export default function ReactTimer({
   const start = () => setRunning(true);
   const stop = () => setRunning(false);
 
-  const reset = () => {
-    setRunning(false);
-
-    accumulatedMsRef.current = 0;
-    setFrameCount(0);
-
-    const now = performance.now();
-    startMsRef.current = now;
-    lastMsRef.current = now;
-
-    setElapsedMs(0);
-    setFrameMs(0);
-  };
-
   // ------------------------------------------------------------
   // Frame rate controls
   // ------------------------------------------------------------
@@ -111,8 +117,15 @@ export default function ReactTimer({
   // ------------------------------------------------------------
   // Render
   // ------------------------------------------------------------
+  onRenderStart?.();
+
+  // Track after render completes (via effect)
+  useLayoutEffect(() => {
+    onRenderEnd?.();
+  });
+
   return (
-    <div style={{ fontFamily: "monospace", width: 280 }}>
+    <div style={{ fontFamily: "monospace", width: 280, textAlign: "center" }}>
       <h3>{label}</h3>
 
       <div
