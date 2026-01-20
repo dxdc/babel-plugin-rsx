@@ -1,31 +1,64 @@
 {
   "name": "babel-plugin-rsx",
   "version": "1.0.0",
+  "description": "Babel plugin for RSX - On-Demand Rendered Components",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./src/babel-plugin-rsx.cjs",
+  "types": "./src/custom.d.ts",
+  "exports": {
+    ".": {
+      "require": "./src/babel-plugin-rsx.cjs",
+      "types": "./src/custom.d.ts"
+    },
+    "./types": "./src/custom.d.ts"
+  },
   "files": [
-    "dist"
+    "src"
   ],
   "scripts": {
     "dev": "vite --config examples/vite.config.ts",
-    "build": "tsc -p ./src --outDir dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
-    "preview": "vite preview --config examples/vite.config.ts"
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "preview": "vite preview --config examples/vite.config.ts",
+    "prepublishOnly": "yarn test && yarn lint"
   },
-  "dependencies": {},
+  "peerDependencies": {
+    "@babel/core": "^7.0.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.5",
+    "@babel/core": "^7.28.6",
+    "@babel/preset-react": "^7.28.5",
+    "@eslint/js": "^9.39.2",
+    "@types/node": "^24.10.9",
+    "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.1",
-    "eslint": "^9.39.1",
+    "@vitejs/plugin-react": "^5.1.2",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
+    "eslint-plugin-react-refresh": "^0.4.26",
     "globals": "^16.5.0",
+    "prettier": "^3.8.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "shiki": "^1.29.2",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
-  }
+    "typescript-eslint": "^8.53.1",
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4"
+  },
+  "keywords": [
+    "babel-plugin",
+    "react",
+    "rsx",
+    "hooks",
+    "performance"
+  ],
+  "license": "MIT"
 }

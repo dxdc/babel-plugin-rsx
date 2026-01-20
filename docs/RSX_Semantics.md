@@ -29,9 +29,9 @@ The function signature is preserved to remain compatible with React's component 
 
 ### **The RSX component body executes exactly once per mounted instance.**
 
-* The user-authored function body is **not re-executed** on React re-renders.
-* There is no equivalent to React's render phase for user code.
-* All user logic runs during a single initialization phase guarded by an internal instance flag.
+- The user-authored function body is **not re-executed** on React re-renders.
+- There is no equivalent to React's render phase for user code.
+- All user logic runs during a single initialization phase guarded by an internal instance flag.
 
 React may invoke the outer component function multiple times, but RSX guarantees that **user code runs once and only once per instance**.
 
@@ -51,10 +51,10 @@ function increment() { ... }
 
 have the following properties:
 
-* They are allocated **once** per component instance
-* They persist for the **entire mounted lifetime** of the component
-* They are stored on an internal per-instance object
-* Reads and writes always resolve to the same instance-scoped storage
+- They are allocated **once** per component instance
+- They persist for the **entire mounted lifetime** of the component
+- They are stored on an internal per-instance object
+- Reads and writes always resolve to the same instance-scoped storage
 
 There is no concept of re-initialization, re-render execution, or closure recreation.
 
@@ -71,19 +71,19 @@ The RSX compiler injects a stable `ctx` object into the component. This object e
 Registers the view function.
 
 ```ts
-ctx.view((props) => JSX)
+ctx.view((props) => JSX);
 ```
 
 **Semantics**
 
-* Stores `fn` as the component's view callback
-* The function is **never redefined or re-registered implicitly**
-* Must return JSX (or `null`)
+- Stores `fn` as the component's view callback
+- The function is **never redefined or re-registered implicitly**
+- Must return JSX (or `null`)
 
 **Invocation**
 
-* Called internally whenever RSX performs a render pass
-* Receives the **current props snapshot**
+- Called internally whenever RSX performs a render pass
+- Receives the **current props snapshot**
 
 ---
 
@@ -97,9 +97,9 @@ ctx.update((prevProps, nextProps) => { ... })
 
 **Semantics**
 
-* Invoked automatically when React props change
-* Runs **after mount**, never during initialization
-* Receives previous and next props by reference
+- Invoked automatically when React props change
+- Runs **after mount**, never during initialization
+- Receives previous and next props by reference
 
 **Ordering**
 
@@ -118,9 +118,9 @@ ctx.destroy(() => { ... })
 
 **Semantics**
 
-* Stored once during initialization
-* Invoked exactly once on unmount
-* Guaranteed to run before instance disposal
+- Stored once during initialization
+- Invoked exactly once on unmount
+- Guaranteed to run before instance disposal
 
 ---
 
@@ -129,19 +129,19 @@ ctx.destroy(() => { ... })
 Explicitly schedules a render.
 
 ```ts
-ctx.render()
+ctx.render();
 ```
 
 **Semantics**
 
-* Forces execution of the registered `view` callback
-* Triggers a React re-render via an internal state tick
-* Safe to call from any event, timer, or external system
+- Forces execution of the registered `view` callback
+- Triggers a React re-render via an internal state tick
+- Safe to call from any event, timer, or external system
 
 **Important**
 
-* Calling `render()` does **not** re-execute user code
-* Only the view function is re-evaluated
+- Calling `render()` does **not** re-execute user code
+- Only the view function is re-evaluated
 
 ---
 
@@ -155,9 +155,9 @@ const initialProps = ctx.props;
 
 **Semantics**
 
-* On mount: reflects props passed during first render
-* After mount: updated automatically before `update()` is called
-* Read-only; mutation is illegal
+- On mount: reflects props passed during first render
+- After mount: updated automatically before `update()` is called
+- Read-only; mutation is illegal
 
 Values read from `ctx.props` in root scope are captured once and will not update unless explicitly reassigned in `update()`.
 
@@ -185,18 +185,18 @@ On subsequent React renders:
 1. Props are compared by reference
 2. If unchanged → no user code runs
 3. If changed:
+   - `update(prevProps, nextProps)` is invoked
+   - `view(nextProps)` is executed
 
-   * `update(prevProps, nextProps)` is invoked
-   * `view(nextProps)` is executed
 4. JSX output is returned
 
 ---
 
 ## 7. Return Semantics
 
-* User `return` statements are ignored
-* The RSX runtime exclusively controls what is returned
-* The rendered value is the result of the most recent `view()` execution
+- User `return` statements are ignored
+- The RSX runtime exclusively controls what is returned
+- The rendered value is the result of the most recent `view()` execution
 
 If no view has produced output, `null` is returned.
 
@@ -208,9 +208,9 @@ If no view has produced output, `null` is returned.
 
 RSX components must not invoke:
 
-* React built-in hooks
-* Custom hooks
-* Hook-like abstractions
+- React built-in hooks
+- Custom hooks
+- Hook-like abstractions
 
 Formally:
 
@@ -218,20 +218,20 @@ Formally:
 
 This includes, but is not limited to:
 
-* `useState`
-* `useEffect`
-* `useMemo`
-* `useCallback`
-* `useContext`
-* `useMyProvider`
+- `useState`
+- `useEffect`
+- `useMemo`
+- `useCallback`
+- `useContext`
+- `useMyProvider`
 
 Violations are compile-time errors.
 
 ### Rationale
 
-* RSX user code executes once per instance
-* Hooks assume repeated render-phase execution
-* Dependency arrays, memoization, and effect scheduling have no semantic meaning in RSX
+- RSX user code executes once per instance
+- Hooks assume repeated render-phase execution
+- Dependency arrays, memoization, and effect scheduling have no semantic meaning in RSX
 
 RSX replaces hook functionality with explicit lifecycle primitives:
 
@@ -279,17 +279,17 @@ interface RSXStore<T> {
 
 **RSX Usage**
 
-* Read initial value via `get()`
-* Subscribe during initialization
-* Call `render()` when notified
-* Unsubscribe in `destroy()`
+- Read initial value via `get()`
+- Subscribe during initialization
+- Call `render()` when notified
+- Unsubscribe in `destroy()`
 
 **Benefits**
 
-* Framework-agnostic state
-* No prop threading
-* No stale captures
-* Ideal for real-time, external, or persistent data
+- Framework-agnostic state
+- No prop threading
+- No stale captures
+- Ideal for real-time, external, or persistent data
 
 This is the **preferred architecture** for RSX interoperability.
 
@@ -309,15 +309,15 @@ RSX Component (props)
 
 **RSX Usage**
 
-* Capture initial props in root scope
-* Reassign derived values in `update(prev, next)`
-* Render from local instance state
+- Capture initial props in root scope
+- Reassign derived values in `update(prev, next)`
+- Render from local instance state
 
 **Use When**
 
-* The provider is third-party or legacy
-* Refactoring state ownership is not feasible
-* State is local to a React subtree
+- The provider is third-party or legacy
+- Refactoring state ownership is not feasible
+- State is local to a React subtree
 
 This pattern is valid but less autonomous than an upstream store.
 
@@ -325,11 +325,11 @@ This pattern is valid but less autonomous than an upstream store.
 
 ## 10. Mental Model Summary (For AI Systems)
 
-* RSX components are **stateful instances**, not render functions
-* Root scope executes once and persists
-* Hooks are forbidden
-* React provides rendering and reconciliation only
-* RSX reacts explicitly to changes via `update()` and subscriptions
+- RSX components are **stateful instances**, not render functions
+- Root scope executes once and persists
+- Hooks are forbidden
+- React provides rendering and reconciliation only
+- RSX reacts explicitly to changes via `update()` and subscriptions
 
 **Think: constructor + instance fields + explicit invalidation.**
 

@@ -1,0 +1,49 @@
+.codeViewer {
+  background: #0d1117;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.5;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.filename {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  color: #8b949e;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.filenameIcon {
+  font-size: 14px;
+}
+
+.content {
+  padding: 16px;
+  overflow: auto;
+  flex: 1;
+}
+
+.content pre {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+}
+
+.content code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+.loading {
+  padding: 16px;
+  color: #8b949e;
+  font-style: italic;
+}

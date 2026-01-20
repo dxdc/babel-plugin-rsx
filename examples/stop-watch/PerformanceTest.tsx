@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import RsxTimer from "./RsxExample.rsx";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactTimer from "./ReactExample.tsx";
+import RsxTimer from "./RsxExample.rsx";
 
 interface PerfMetrics {
   renderCount: number;
@@ -27,7 +27,7 @@ function usePerfTracker(label: string) {
   const onRenderEnd = useCallback(() => {
     const duration = performance.now() - lastRenderStart.current;
     const m = metricsRef.current;
-    
+
     m.renderCount++;
     m.totalRenderTime += duration;
     m.avgRenderTime = m.totalRenderTime / m.renderCount;
@@ -36,7 +36,7 @@ function usePerfTracker(label: string) {
   }, []);
 
   const getMetrics = useCallback(() => ({ ...metricsRef.current }), []);
-  
+
   const reset = useCallback(() => {
     metricsRef.current = {
       renderCount: 0,
@@ -51,29 +51,26 @@ function usePerfTracker(label: string) {
 }
 
 // Wrapper to track React component renders
-function TrackedReactTimer({ 
-  running, 
-  onRender 
-}: { 
-  running: boolean; 
-  onRender: () => void;
-}) {
+function TrackedReactTimer({ running, onRender }: { running: boolean; onRender: () => void }) {
   useEffect(() => {
     onRender();
   });
-  
+
   return <ReactTimer running={running} />;
 }
 
 export default function PerformanceTest() {
   const [running, setRunning] = useState(false);
   const [instanceCount, setInstanceCount] = useState(1);
-  const [results, setResults] = useState<{ react: PerfMetrics; rsx: PerfMetrics } | null>(null);
+  const [results, setResults] = useState<{
+    react: PerfMetrics;
+    rsx: PerfMetrics;
+  } | null>(null);
   const [testDuration, setTestDuration] = useState(5); // seconds
-  
+
   const reactTracker = usePerfTracker("React");
   const rsxTracker = usePerfTracker("RSX");
-  
+
   const rsxRenderCountRef = useRef(0);
 
   const runTest = useCallback(() => {
@@ -82,14 +79,14 @@ export default function PerformanceTest() {
     rsxTracker.reset();
     rsxRenderCountRef.current = 0;
     setResults(null);
-    
+
     // Start timers
     setRunning(true);
-    
+
     // Stop after duration and collect results
     setTimeout(() => {
       setRunning(false);
-      
+
       // Small delay to ensure final renders are counted
       setTimeout(() => {
         setResults({
@@ -104,16 +101,24 @@ export default function PerformanceTest() {
   }, [testDuration, reactTracker, rsxTracker]);
 
   // Track RSX renders via a ref callback approach
-  const trackRsxRender = useCallback(() => {
+  // eslint-disable-next-line no-unused-vars
+  const _trackRsxRender = useCallback(() => {
     rsxRenderCountRef.current++;
   }, []);
 
   return (
     <div style={{ padding: 20, fontFamily: "system-ui" }}>
       <h1>Performance Test: React vs RSX</h1>
-      
+
       {/* Controls */}
-      <div style={{ marginBottom: 20, display: "flex", gap: 16, alignItems: "center" }}>
+      <div
+        style={{
+          marginBottom: 20,
+          display: "flex",
+          gap: 16,
+          alignItems: "center",
+        }}
+      >
         <label>
           Test Duration (s):
           <input
@@ -125,7 +130,7 @@ export default function PerformanceTest() {
             style={{ marginLeft: 8, width: 60 }}
           />
         </label>
-        
+
         <label>
           Instances:
           <input
@@ -137,25 +142,25 @@ export default function PerformanceTest() {
             style={{ marginLeft: 8, width: 60 }}
           />
         </label>
-        
-        <button 
-          onClick={runTest}
-          disabled={running}
-          style={{ padding: "8px 16px", fontSize: 16 }}
-        >
+
+        <button onClick={runTest} disabled={running} style={{ padding: "8px 16px", fontSize: 16 }}>
           {running ? `Running... (${testDuration}s)` : "Run Performance Test"}
         </button>
       </div>
 
       {/* Results */}
       {results && (
-        <div style={{ 
-          marginBottom: 20, 
-          padding: 16, 
-          background: "#f5f5f5", 
-          borderRadius: 8 
-        }}>
-          <h2>Results ({testDuration}s test, {instanceCount} instance(s))</h2>
+        <div
+          style={{
+            marginBottom: 20,
+            padding: 16,
+            background: "#f5f5f5",
+            borderRadius: 8,
+          }}
+        >
+          <h2>
+            Results ({testDuration}s test, {instanceCount} instance(s))
+          </h2>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "2px solid #333" }}>
@@ -176,16 +181,24 @@ export default function PerformanceTest() {
               </tr>
               <tr>
                 <td style={{ padding: 8 }}>Avg Render Time (ms)</td>
-                <td style={{ textAlign: "right", padding: 8 }}>{results.react.avgRenderTime.toFixed(3)}</td>
-                <td style={{ textAlign: "right", padding: 8 }}>{results.rsx.avgRenderTime.toFixed(3)}</td>
+                <td style={{ textAlign: "right", padding: 8 }}>
+                  {results.react.avgRenderTime.toFixed(3)}
+                </td>
+                <td style={{ textAlign: "right", padding: 8 }}>
+                  {results.rsx.avgRenderTime.toFixed(3)}
+                </td>
                 <td style={{ textAlign: "right", padding: 8 }}>
                   {(results.react.avgRenderTime - results.rsx.avgRenderTime).toFixed(3)}
                 </td>
               </tr>
               <tr>
                 <td style={{ padding: 8 }}>Total Render Time (ms)</td>
-                <td style={{ textAlign: "right", padding: 8 }}>{results.react.totalRenderTime.toFixed(2)}</td>
-                <td style={{ textAlign: "right", padding: 8 }}>{results.rsx.totalRenderTime.toFixed(2)}</td>
+                <td style={{ textAlign: "right", padding: 8 }}>
+                  {results.react.totalRenderTime.toFixed(2)}
+                </td>
+                <td style={{ textAlign: "right", padding: 8 }}>
+                  {results.rsx.totalRenderTime.toFixed(2)}
+                </td>
                 <td style={{ textAlign: "right", padding: 8 }}>
                   {(results.react.totalRenderTime - results.rsx.totalRenderTime).toFixed(2)}
                 </td>
@@ -201,37 +214,45 @@ export default function PerformanceTest() {
           <h3>React Timer ({instanceCount}x)</h3>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
             {Array.from({ length: instanceCount }).map((_, i) => (
-              <TrackedReactTimer 
-                key={i} 
-                running={running} 
-                onRender={reactTracker.onRenderEnd}
-              />
+              <TrackedReactTimer key={i} running={running} onRender={reactTracker.onRenderEnd} />
             ))}
           </div>
         </div>
-        
+
         <div>
           <h3>RSX Timer ({instanceCount}x)</h3>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
             {Array.from({ length: instanceCount }).map((_, i) => (
-              <RsxTimer 
-                key={i} 
-                running={running}
-                label={`RSX #${i + 1}`}
-              />
+              <RsxTimer key={i} running={running} label={`RSX #${i + 1}`} />
             ))}
           </div>
         </div>
       </div>
-      
+
       {/* Instructions */}
-      <div style={{ marginTop: 40, padding: 16, background: "#e8f4fd", borderRadius: 8 }}>
+      <div
+        style={{
+          marginTop: 40,
+          padding: 16,
+          background: "#e8f4fd",
+          borderRadius: 8,
+        }}
+      >
         <h3>Additional Testing Methods:</h3>
         <ol>
-          <li><strong>Chrome DevTools Performance Tab:</strong> Record while running to see CPU/memory usage</li>
-          <li><strong>React DevTools Profiler:</strong> Shows component render counts and durations</li>
-          <li><strong>Memory Tab:</strong> Take heap snapshots before/after to compare memory usage</li>
-          <li><strong>Lighthouse:</strong> Run performance audit for overall metrics</li>
+          <li>
+            <strong>Chrome DevTools Performance Tab:</strong> Record while running to see CPU/memory
+            usage
+          </li>
+          <li>
+            <strong>React DevTools Profiler:</strong> Shows component render counts and durations
+          </li>
+          <li>
+            <strong>Memory Tab:</strong> Take heap snapshots before/after to compare memory usage
+          </li>
+          <li>
+            <strong>Lighthouse:</strong> Run performance audit for overall metrics
+          </li>
         </ol>
       </div>
     </div>

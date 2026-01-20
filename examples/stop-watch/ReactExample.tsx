@@ -6,6 +6,7 @@ interface HighResTimerReactProps {
 }
 
 export default function ReactTimer({
+  label = "React Timer",
   running: runningProp,
 }: HighResTimerReactProps) {
   // ------------------------------------------------------------
@@ -13,8 +14,8 @@ export default function ReactTimer({
   // ------------------------------------------------------------
   const [elapsedMs, setElapsedMs] = useState(0);
   const [frameMs, setFrameMs] = useState(0);
+  const [frameCount, setFrameCount] = useState(0);
   const [running, setRunning] = useState<boolean>(!!runningProp);
-
 
   // ------------------------------------------------------------
   // Mutable refs (non-reactive)
@@ -30,7 +31,7 @@ export default function ReactTimer({
   // ------------------------------------------------------------
   useEffect(() => {
     if (typeof runningProp === "boolean") {
-      /*eslint-disable-next-line react-hooks/exhaustive-deps */
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRunning(runningProp);
     }
   }, [runningProp]);
@@ -44,11 +45,9 @@ export default function ReactTimer({
 
       if (delta >= targetFrameMsRef.current) {
         lastMsRef.current = now;
-
+        setFrameCount((c) => c + 1);
         setFrameMs(delta);
-        setElapsedMs(
-          accumulatedMsRef.current + (now - startMsRef.current)
-        );
+        setElapsedMs(accumulatedMsRef.current + (now - startMsRef.current));
       }
 
       rafIdRef.current = requestAnimationFrame(loop);
@@ -85,7 +84,10 @@ export default function ReactTimer({
   const stop = () => setRunning(false);
 
   const reset = () => {
+    setRunning(false);
+
     accumulatedMsRef.current = 0;
+    setFrameCount(0);
 
     const now = performance.now();
     startMsRef.current = now;
@@ -99,17 +101,11 @@ export default function ReactTimer({
   // Frame rate controls
   // ------------------------------------------------------------
   const increaseFrameRate = () => {
-    targetFrameMsRef.current = Math.max(
-      4,
-      targetFrameMsRef.current - 4
-    );
+    targetFrameMsRef.current = Math.max(4, targetFrameMsRef.current - 4);
   };
 
   const decreaseFrameRate = () => {
-    targetFrameMsRef.current = Math.min(
-      100,
-      targetFrameMsRef.current + 4
-    );
+    targetFrameMsRef.current = Math.min(100, targetFrameMsRef.current + 4);
   };
 
   // ------------------------------------------------------------
@@ -117,6 +113,8 @@ export default function ReactTimer({
   // ------------------------------------------------------------
   return (
     <div style={{ fontFamily: "monospace", width: 280 }}>
+      <h3>{label}</h3>
+
       <div
         style={{
           fontSize: 32,
@@ -125,6 +123,17 @@ export default function ReactTimer({
         }}
       >
         {elapsedMs.toFixed(1)}
+      </div>
+
+      <div
+        style={{
+          textAlign: "center",
+          marginBottom: 8,
+          fontSize: 12,
+          color: "#888",
+        }}
+      >
+        Frames: {frameCount}
       </div>
 
       <div style={{ textAlign: "center", marginBottom: 12 }}>
@@ -151,12 +160,8 @@ export default function ReactTimer({
           marginTop: 10,
         }}
       >
-        <button onClick={increaseFrameRate}>
-          Increase Frame Rate
-        </button>
-        <button onClick={decreaseFrameRate}>
-          Decrease Frame Rate
-        </button>
+        <button onClick={increaseFrameRate}>Increase Frame Rate</button>
+        <button onClick={decreaseFrameRate}>Decrease Frame Rate</button>
       </div>
     </div>
   );

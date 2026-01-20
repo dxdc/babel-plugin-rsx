@@ -1,13 +1,15 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import styles from "./App.module.css";
+import { CodeViewer } from "./components/CodeViewer";
+import { getFilename, getSourceCode } from "./utils/sourceLoader";
 
 /**
  * NOTE:
  * For now we statically register examples.
  * Later this can be auto-generated via Vite glob imports.
  */
-import RsxTimer from "./stop-watch/RsxExample.rsx";
 import ReactTimer from "./stop-watch/ReactExample.tsx";
+import RsxTimer from "./stop-watch/RsxExample.rsx";
 import timerManifest from "./stop-watch/manifest.json";
 
 type Example = {
@@ -31,9 +33,7 @@ const EXAMPLES: Example[] = [
 type Tab = "demo" | "code";
 
 export default function App() {
-  const [activeExample, setActiveExample] = useState<string | null>(
-    EXAMPLES[0]?.id ?? null
-  );
+  const [activeExample, setActiveExample] = useState<string | null>(EXAMPLES[0]?.id ?? null);
 
   return (
     <div className={styles.app}>
@@ -44,9 +44,7 @@ export default function App() {
           {EXAMPLES.map((ex) => (
             <li
               key={ex.id}
-              className={
-                ex.id === activeExample ? styles.activeItem : undefined
-              }
+              className={ex.id === activeExample ? styles.activeItem : undefined}
               onClick={() => setActiveExample(ex.id)}
             >
               <strong>{ex.name}</strong>
@@ -59,9 +57,7 @@ export default function App() {
       {/* Main Content */}
       <main className={styles.main}>
         {EXAMPLES.map((ex) =>
-          ex.id === activeExample ? (
-            <ExampleView key={ex.id} example={ex} />
-          ) : null
+          ex.id === activeExample ? <ExampleView key={ex.id} example={ex} /> : null
         )}
       </main>
     </div>
@@ -75,8 +71,8 @@ export default function App() {
 function ExampleView({ example }: { example: Example }) {
   return (
     <div className={styles.example}>
-      <Panel title="RSX" Component={example.Rsx} />
-      <Panel title="React" Component={example.React} />
+      <Panel title="RSX" Component={example.Rsx} exampleId={example.id} type="rsx" />
+      <Panel title="React" Component={example.React} exampleId={example.id} type="react" />
     </div>
   );
 }
@@ -88,9 +84,13 @@ function ExampleView({ example }: { example: Example }) {
 function Panel({
   title,
   Component,
+  exampleId,
+  type,
 }: {
   title: string;
   Component: React.ComponentType<Record<string, unknown>>;
+  exampleId: string;
+  type: "rsx" | "react";
 }) {
   const [tab, setTab] = useState<Tab>("demo");
 
@@ -116,23 +116,15 @@ function Panel({
 
       <div className={styles.panelBody}>
         {tab === "demo" ? (
-          <Component />
+          <Component label={`${title} Timer`} />
         ) : (
-          <CodePlaceholder />
+          <CodeViewer
+            code={getSourceCode(exampleId, type)}
+            language="tsx"
+            filename={getFilename(exampleId, type)}
+          />
         )}
       </div>
     </section>
-  );
-}
-
-/* -------------------------------------------------- */
-/* Code Placeholder (swap later for Shiki / Prism) */
-/* -------------------------------------------------- */
-
-function CodePlaceholder() {
-  return (
-    <pre className={styles.code}>
-      <code>// Code viewer coming next</code>
-    </pre>
   );
 }

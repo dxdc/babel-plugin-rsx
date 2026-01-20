@@ -9,6 +9,7 @@ export default function RsxTimer(
   let lastMs = 0;
   let elapsedMs = 0;
   let frameMs = 0;
+  let frameCount = 0;
 
   let rafId = null;
   let targetFrameMs = 16; // ~60fps default
@@ -36,6 +37,10 @@ export default function RsxTimer(
           }}
         >
           {currentValue}
+        </div>
+
+        <div style={{ textAlign: "center", marginBottom: 8, fontSize: 12, color: "#888" }}>
+          Frames: {frameCount}
         </div>
 
         <div style={{ textAlign: "center", marginBottom: 12 }}>
@@ -81,7 +86,7 @@ export default function RsxTimer(
       next.running ? start() : stop();
     }
   });
-  
+
   // ------------------------------------------------------------
   // Destroy
   // ------------------------------------------------------------
@@ -113,7 +118,10 @@ export default function RsxTimer(
   }
 
   function reset() {
+    stop();
+
     accumulatedMs = 0;
+    frameCount = 0;
 
     const now = performance.now();
     startMs = now;
@@ -127,6 +135,7 @@ export default function RsxTimer(
     const delta = now - lastMs;
 
     if (delta >= targetFrameMs) {
+      frameCount++;
       frameMs = delta;
       elapsedMs = accumulatedMs + (now - startMs);
       lastMs = now;

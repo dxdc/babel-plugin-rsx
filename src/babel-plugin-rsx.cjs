@@ -1,6 +1,6 @@
 function ensureNamedImport(programPath, source, names, t) {
   let importDecl = programPath.node.body.find(
-    n => t.isImportDeclaration(n) && n.source.value === source
+    (n) => t.isImportDeclaration(n) && n.source.value === source
   );
 
   if (!importDecl) {
@@ -10,15 +10,13 @@ function ensureNamedImport(programPath, source, names, t) {
 
   const existing = new Set(
     importDecl.specifiers
-      .filter(s => t.isImportSpecifier(s))
-      .map(s => s.imported.name)
+      .filter((s) => t.isImportSpecifier(s))
+      .map((s) => (t.isIdentifier(s.imported) ? s.imported.name : s.imported.value))
   );
 
   for (const name of names) {
     if (!existing.has(name)) {
-      importDecl.specifiers.push(
-        t.importSpecifier(t.identifier(name), t.identifier(name))
-      );
+      importDecl.specifiers.push(t.importSpecifier(t.identifier(name), t.identifier(name)));
     }
   }
 }
@@ -29,12 +27,7 @@ function isInternal(name) {
 }
 
 function isInstanceField(name, state) {
-  return (
-    state &&
-    state.rsx &&
-    state.rsx.instanceVars &&
-    state.rsx.instanceVars.has(name)
-  );
+  return state && state.rsx && state.rsx.instanceVars && state.rsx.instanceVars.has(name);
 }
 
 function referencesProps(node, t) {
@@ -59,15 +52,12 @@ function referencesProps(node, t) {
   return found;
 }
 
-
 module.exports = function ({ types: t }) {
-  let bannedHooks;
   return {
     visitor: {
       Program: {
         enter(path, state) {
-          
-          bannedHooks = new Set();
+          state.bannedHooks = new Set();
           const filename = state.filename || "";
 
           // Only transform .rsx files
@@ -83,8 +73,8 @@ module.exports = function ({ types: t }) {
             instanceVars: new Map(),
             componentPath: null,
           };
-          ensureNamedImport(path, "react", ["useRef", "useState", "useEffect"], t);
           //ensureNamedImport(path, "react-raw", ["bindRender"], t);
+          ensureNamedImport(path, "react", ["useRef", "useState", "useEffect"], t);
         },
 
         exit(path, state) {
@@ -100,10 +90,7 @@ module.exports = function ({ types: t }) {
           // In Phase 2 we ALSO seed internal RSX runtime slots onto this object.
           // ------------------------------------------------------------
           const initProps = vars.map(([name, init]) =>
-            t.objectProperty(
-              t.identifier(name),
-              init || t.identifier("undefined")
-            )
+            t.objectProperty(t.identifier(name), init || t.identifier("undefined"))
           );
 
           // ------------------------------------------------------------
@@ -126,7 +113,7 @@ module.exports = function ({ types: t }) {
             t.objectProperty(t.identifier("__rsx_updateCb"), t.nullLiteral()),
             t.objectProperty(t.identifier("__rsx_viewCb"), t.nullLiteral()),
             t.objectProperty(t.identifier("__rsx_destroyCb"), t.nullLiteral()),
-            t.objectProperty(t.identifier("__rsx_viewResult"), t.nullLiteral()),
+            t.objectProperty(t.identifier("__rsx_viewResult"), t.nullLiteral())
             //t.objectProperty(t.identifier("__rsx_triggerRender"),t.nullLiteral())
           );
 
@@ -135,10 +122,9 @@ module.exports = function ({ types: t }) {
           const body = state.rsx.componentPath.get("body");
 
           // Create the injected useState call *as a standalone node*
-          const injectedUseStateCall = t.callExpression(
-            t.identifier("useState"),
-            [t.numericLiteral(0)]
-          );
+          const injectedUseStateCall = t.callExpression(t.identifier("useState"), [
+            t.numericLiteral(0),
+          ]);
 
           // Tag it so the ban rule can skip it
           injectedUseStateCall.__rsxInjected = true;
@@ -167,20 +153,14 @@ module.exports = function ({ types: t }) {
             t.ifStatement(
               t.binaryExpression(
                 "===",
-                t.memberExpression(
-                  t.identifier("__instanceRef"),
-                  t.identifier("current")
-                ),
+                t.memberExpression(t.identifier("__instanceRef"), t.identifier("current")),
                 t.nullLiteral()
               ),
               t.blockStatement([
                 t.expressionStatement(
                   t.assignmentExpression(
                     "=",
-                    t.memberExpression(
-                      t.identifier("__instanceRef"),
-                      t.identifier("current")
-                    ),
+                    t.memberExpression(t.identifier("__instanceRef"), t.identifier("current")),
                     initObject
                   )
                 ),
@@ -191,10 +171,7 @@ module.exports = function ({ types: t }) {
             t.variableDeclaration("const", [
               t.variableDeclarator(
                 t.identifier("__instance"),
-                t.memberExpression(
-                  t.identifier("__instanceRef"),
-                  t.identifier("current")
-                )
+                t.memberExpression(t.identifier("__instanceRef"), t.identifier("current"))
               ),
             ]),
 
@@ -203,18 +180,15 @@ module.exports = function ({ types: t }) {
                 t.identifier("__rsx_triggerRender"),
                 t.arrowFunctionExpression(
                   [],
-                  t.callExpression(
-                    t.identifier("__rsxForceUpdate"),
-                    [
-                      t.arrowFunctionExpression(
-                        [t.identifier("x")],
-                        t.binaryExpression("+", t.identifier("x"), t.numericLiteral(1))
-                      )
-                    ]
-                  )
+                  t.callExpression(t.identifier("__rsxForceUpdate"), [
+                    t.arrowFunctionExpression(
+                      [t.identifier("x")],
+                      t.binaryExpression("+", t.identifier("x"), t.numericLiteral(1))
+                    ),
+                  ])
                 )
-              )
-            ])
+              ),
+            ]),
           ]);
 
           // Add useEffect for cleanup/destroy callback
@@ -242,17 +216,17 @@ module.exports = function ({ types: t }) {
                                   ),
                                   []
                                 )
-                              )
+                              ),
                             ])
-                          )
+                          ),
                         ])
                       )
-                    )
+                    ),
                   ])
                 ),
-                t.arrayExpression([])
+                t.arrayExpression([]),
               ])
-            )
+            ),
           ]);
         },
       },
@@ -271,7 +245,7 @@ module.exports = function ({ types: t }) {
         // Transform params to match React component signature: (props, ref?)
         // ------------------------------------------------------------
         const hasSecondParam = path.node.params.length > 1;
-        
+
         // Replace user's params with standard React params
         path.node.params = [t.identifier("__reactProps")];
         if (hasSecondParam) {
@@ -313,7 +287,7 @@ module.exports = function ({ types: t }) {
               t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_currentProps")),
               t.identifier("__reactProps")
             )
-          )
+          ),
         ];
 
         // ------------------------------------------------------------
@@ -337,7 +311,7 @@ module.exports = function ({ types: t }) {
                       t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_viewCb")),
                       t.identifier("fn")
                     )
-                  )
+                  ),
                 ])
               ),
               // update(fn) { __instance.__rsx_updateCb = fn; }
@@ -349,10 +323,13 @@ module.exports = function ({ types: t }) {
                   t.expressionStatement(
                     t.assignmentExpression(
                       "=",
-                      t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_updateCb")),
+                      t.memberExpression(
+                        t.identifier("__instance"),
+                        t.identifier("__rsx_updateCb")
+                      ),
                       t.identifier("fn")
                     )
-                  )
+                  ),
                 ])
               ),
               // destroy(fn) { __instance.__rsx_destroyCb = fn; }
@@ -364,10 +341,13 @@ module.exports = function ({ types: t }) {
                   t.expressionStatement(
                     t.assignmentExpression(
                       "=",
-                      t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_destroyCb")),
+                      t.memberExpression(
+                        t.identifier("__instance"),
+                        t.identifier("__rsx_destroyCb")
+                      ),
                       t.identifier("fn")
                     )
-                  )
+                  ),
                 ])
               ),
               // render() {  __rsx_render(); __rsx_triggerRender(); }
@@ -376,12 +356,8 @@ module.exports = function ({ types: t }) {
                 t.identifier("render"),
                 [],
                 t.blockStatement([
-                  t.expressionStatement(
-                    t.callExpression(t.identifier("__rsx_render"), [])
-                  ),
-                  t.expressionStatement(
-                    t.callExpression(t.identifier("__rsx_triggerRender"), [])
-                  )
+                  t.expressionStatement(t.callExpression(t.identifier("__rsx_render"), [])),
+                  t.expressionStatement(t.callExpression(t.identifier("__rsx_triggerRender"), [])),
                 ])
               ),
 
@@ -392,12 +368,15 @@ module.exports = function ({ types: t }) {
                 [],
                 t.blockStatement([
                   t.returnStatement(
-                    t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_currentProps"))
-                  )
+                    t.memberExpression(
+                      t.identifier("__instance"),
+                      t.identifier("__rsx_currentProps")
+                    )
+                  ),
                 ])
-              )
+              ),
             ])
-          )
+          ),
         ]);
 
         // ------------------------------------------------------------
@@ -408,10 +387,7 @@ module.exports = function ({ types: t }) {
           [],
           t.blockStatement([
             t.ifStatement(
-              t.memberExpression(
-                t.identifier("__instance"),
-                t.identifier("__rsx_viewCb")
-              ),
+              t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_viewCb")),
               t.blockStatement([
                 t.expressionStatement(
                   t.assignmentExpression(
@@ -421,21 +397,18 @@ module.exports = function ({ types: t }) {
                       t.identifier("__rsx_viewResult")
                     ),
                     t.callExpression(
-                      t.memberExpression(
-                        t.identifier("__instance"),
-                        t.identifier("__rsx_viewCb")
-                      ),
+                      t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_viewCb")),
                       [
                         t.memberExpression(
                           t.identifier("__instance"),
                           t.identifier("__rsx_currentProps")
-                        )
+                        ),
                       ]
                     )
                   )
-                )
+                ),
               ])
-            )
+            ),
           ])
         );
 
@@ -464,17 +437,12 @@ module.exports = function ({ types: t }) {
             t.expressionStatement(
               t.callExpression(
                 t.memberExpression(t.identifier("__userInit"), t.identifier("call")),
-                [
-                  t.thisExpression(),
-                  t.identifier("__rsx_ctx")
-                ]
+                [t.thisExpression(), t.identifier("__rsx_ctx")]
               )
             ),
-            
+
             // NEW: render once on mount so view() output is produced immediately
-            t.expressionStatement(
-              t.callExpression(t.identifier("__rsx_render"), [])
-            )
+            t.expressionStatement(t.callExpression(t.identifier("__rsx_render"), [])),
           ])
         );
 
@@ -490,7 +458,7 @@ module.exports = function ({ types: t }) {
               t.objectProperty(t.identifier("destroy"), t.identifier("destroy"), false, true),
               t.objectProperty(t.identifier("render"), t.identifier("render"), false, true),
               t.objectProperty(t.identifier("props"), t.identifier("props"), false, true),
-            ])
+            ]),
           ],
           t.blockStatement(nonReturnStatements)
         );
@@ -506,29 +474,17 @@ module.exports = function ({ types: t }) {
             "&&",
             t.logicalExpression(
               "&&",
-              t.memberExpression(
-                t.identifier("__instance"),
-                t.identifier("__rsx_initialized")
-              ),
+              t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_initialized")),
               t.binaryExpression(
                 "!==",
-                t.memberExpression(
-                  t.identifier("__instance"),
-                  t.identifier("__rsx_prevProps")
-                ),
+                t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_prevProps")),
                 t.identifier("undefined")
               )
             ),
             t.binaryExpression(
               "!==",
-              t.memberExpression(
-                t.identifier("__instance"),
-                t.identifier("__rsx_prevProps")
-              ),
-              t.memberExpression(
-                t.identifier("__instance"),
-                t.identifier("__rsx_currentProps")
-              )
+              t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_prevProps")),
+              t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_currentProps"))
             )
           ),
           //
@@ -539,15 +495,16 @@ module.exports = function ({ types: t }) {
                 t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_updateCb")),
                 [
                   t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_prevProps")),
-                  t.memberExpression(t.identifier("__instance"), t.identifier("__rsx_currentProps"))
+                  t.memberExpression(
+                    t.identifier("__instance"),
+                    t.identifier("__rsx_currentProps")
+                  ),
                 ]
               )
             ),
 
             // auto render after update
-            t.expressionStatement(
-              t.callExpression(t.identifier("__rsx_render"), [])
-            )
+            t.expressionStatement(t.callExpression(t.identifier("__rsx_render"), [])),
           ])
         );
         // ------------------------------------------------------------
@@ -560,7 +517,7 @@ module.exports = function ({ types: t }) {
             t.nullLiteral()
           )
         );
-        
+
         path.node.body.body = [
           ...trackPropsStatements,
 
@@ -572,9 +529,8 @@ module.exports = function ({ types: t }) {
           updateAndRender,
 
           // NEW: RSX-owned return (discard user returns)
-          finalReturn
+          finalReturn,
         ];
-
       },
       ExportDefaultDeclaration(path, state) {
         if (!state.rsx || state.skipRSX) return;
@@ -596,7 +552,7 @@ module.exports = function ({ types: t }) {
         if (!state.rsx || state.skipRSX) return;
 
         const fn = path.getFunctionParent();
-        if (!fn || fn.node !== state.rsx.componentPath.node) return;
+        if (!fn || !state.rsx.componentPath || fn.node !== state.rsx.componentPath.node) return;
 
         const { id, init } = path.node;
         if (!t.isIdentifier(id)) return;
@@ -615,7 +571,7 @@ module.exports = function ({ types: t }) {
         }
       },
 
-      AssignmentExpression(path , state) {
+      AssignmentExpression(path, state) {
         if (!state.rsx || state.skipRSX) return;
 
         const { left, right } = path.node;
@@ -627,13 +583,10 @@ module.exports = function ({ types: t }) {
          *
          * Props are immutable in RSX and this is never valid.
          */
-        if (
-          t.isMemberExpression(left) &&
-          t.isIdentifier(left.object, { name: "props" })
-        ) {
+        if (t.isMemberExpression(left) && t.isIdentifier(left.object, { name: "props" })) {
           throw path.buildCodeFrameError(
             "[RSX] Props are immutable.\n" +
-            "Do not assign to props.* — treat props as read-only inputs."
+              "Do not assign to props.* — treat props as read-only inputs."
           );
         }
 
@@ -657,12 +610,12 @@ module.exports = function ({ types: t }) {
         const rhsIsPropDerived = referencesProps(right, t);
 
         if (rhsIsPropDerived) {
+          const loc = path.node.loc?.start;
           console.warn(
-            path.buildCodeFrameError(
-              `[RSX] Warning: assigning instance state "${left.name}" from props in root scope.\n` +
+            `[RSX] Warning: assigning instance state "${left.name}" from props in root scope.\n` +
               "Root scope is reactive and may capture stale values.\n" +
-              "Move this logic into init() or update()."
-            ).message
+              "Move this logic into init() or update()." +
+              (loc ? `\n  at ${state.filename}:${loc.line}:${loc.column}` : "")
           );
         }
 
@@ -673,22 +626,17 @@ module.exports = function ({ types: t }) {
          *     ↓
          *   __instance.elapsedMs = ...
          */
-        path.node.left = t.memberExpression(
-          t.identifier("__instance"),
-          t.identifier(left.name)
-        );
+        path.node.left = t.memberExpression(t.identifier("__instance"), t.identifier(left.name));
       },
-      
+
       // Rewrite variable references
       Identifier(path, state) {
         if (!state.rsx || state.skipRSX) return;
         if (!path.isReferencedIdentifier()) return;
 
-        if (
-      path.parentPath.isAssignmentExpression({ left: path.node })
-    ) {
-      return;
-    }
+        if (path.parentPath.isAssignmentExpression({ left: path.node })) {
+          return;
+        }
 
         const name = path.node.name;
 
@@ -698,8 +646,13 @@ module.exports = function ({ types: t }) {
         if (name === "__instance") return;
 
         // Do not rewrite lifecycle function names - they are parameters now
-        if (name === "view" || name === "update" || name === "destroy" || 
-            name === "render" || name === "props") {
+        if (
+          name === "view" ||
+          name === "update" ||
+          name === "destroy" ||
+          name === "render" ||
+          name === "props"
+        ) {
           return;
         }
 
@@ -707,73 +660,85 @@ module.exports = function ({ types: t }) {
         if (!state.rsx.instanceVars.has(name)) return;
 
         // Do not rewrite property keys: __instance.foo
-        if (
-          path.parentPath.isMemberExpression() &&
-          path.parentKey === "property"
-        ) {
+        if (path.parentPath.isMemberExpression() && path.parentKey === "property") {
           return;
         }
 
-        path.replaceWith(
-          t.memberExpression(
-            t.identifier("__instance"),
-            t.identifier(name)
-          )
-        );
+        path.replaceWith(t.memberExpression(t.identifier("__instance"), t.identifier(name)));
       },
       ImportDeclaration(path, state) {
         if (!state.rsx || state.skipRSX) return;
         if (path.node.source.value !== "react") return;
 
+        const BANNED_HOOKS = new Set([
+          "useState",
+          "useCallback",
+          "useMemo",
+          // "useContext",
+          // "useEffect",
+          // "useLayoutEffect",
+          // "useReducer",
+          // "useRef",
+          // "useImperativeHandle",
+          // "useInsertionEffect",
+          // "useDeferredValue",
+          // "useTransition",
+          // "useSyncExternalStore",
+        ]);
+
         for (const spec of path.node.specifiers) {
           if (!t.isImportSpecifier(spec)) continue;
 
-          const imported = spec.imported.name;
+          const imported = t.isIdentifier(spec.imported) ? spec.imported.name : spec.imported.value;
           const local = spec.local.name;
 
-          // Ban these hooks in RSX
-          if (imported === "useState" || 
-              imported === "useCallback" ||
-              imported === "useMemo") {
-            bannedHooks.add(local);
+          if (BANNED_HOOKS.has(imported)) {
+            state.bannedHooks.add(local);
           }
         }
       },
       CallExpression(path, state) {
         if (!state.rsx || state.skipRSX) return;
 
-        
         if (path.node.__rsxInjected) return;
 
         const callee = path.get("callee");
         if (!callee.isIdentifier()) return;
         if (isInternal(callee.node.name)) return;
 
-        if (bannedHooks.has(callee.node.name)) {
+        // FIX: Use state.bannedHooks with null check
+        if (state.bannedHooks && state.bannedHooks.has(callee.node.name)) {
           const name = callee.node.name;
 
           if (name === "useCallback") {
             throw path.buildCodeFrameError(
               "[RSX] useCallback() is not allowed in .rsx files.\n" +
-              "RSX guarantees stable function identity by default.\n" +
-              "Define functions normally and call render() when updates are needed."
+                "RSX guarantees stable function identity by default.\n" +
+                "Define functions normally and call render() when updates are needed."
             );
           }
 
           if (name === "useState") {
             throw path.buildCodeFrameError(
               "[RSX] useState() is not allowed in .rsx files.\n" +
-              "Use RSX local variables for instance state, or external hooks for shared state."
+                "Use RSX local variables for instance state, or external hooks for shared state."
             );
           }
 
           if (name === "useMemo") {
             throw path.buildCodeFrameError(
               "[RSX] useMemo() is not allowed in .rsx files.\n" +
-              "RSX code does not re-run on every render.\n" +
-              "Move expensive work to explicit update logic or manual memoization."
+                "RSX code does not re-run on every render.\n" +
+                "Move expensive work to explicit update logic or manual memoization."
             );
           }
+
+          // FIX: Generic error for any other banned hook
+          throw path.buildCodeFrameError(
+            `[RSX] ${name}() is not allowed in .rsx files.\n` +
+              "RSX components do not support React hooks.\n" +
+              "Use RSX lifecycle methods (view, update, destroy, render) instead."
+          );
         }
       },
     },
